@@ -43,12 +43,12 @@ namespace ANGLECORE
     };
     
     /**
-    * \class AbstractInstrument Instrument.h
+    * \class BlankInstrument Instrument.h
     * This abstract class can be used to create audio instruments that manage internal
     * parameters automatically. The Instrument class also provides that functionnality,
     * with the additional benefit of also providing default parameters.
     */
-    class AbstractInstrument
+    class BlankInstrument
     {
         /**
         * \struct Parameter Instrument.h
@@ -187,7 +187,7 @@ namespace ANGLECORE
 
             /**
             * Creates a parameter renderer dedicated to a set of parameters, usually
-            * those of a single AbstractInstrument.
+            * those of a single BlankInstrument.
             * @param[in] parameters&    Reference to the parameter set to be rendered
             *   through this renderer.
             * @param[in] minimalSmoothingDuration   Minimal duration of all transient
@@ -215,7 +215,7 @@ namespace ANGLECORE
             /**
             * Instructs the renderer to render all of the parameters it is attached
             * to.
-            * This method is called at the beginning of an AbstractInstrument
+            * This method is called at the beginning of an BlankInstrument
             * audioCallback function, in order to precompute the values of all
             * parameters for the next audio block to render. Depending on each
             * parameter's state, the renderer will trigger different computations,
@@ -229,7 +229,7 @@ namespace ANGLECORE
             /**
             * Updates the state of every parameter after having rendered an audio
             * block of size \p blockSize.
-            * This method is called at the end of an AbstractInstrument
+            * This method is called at the end of an BlankInstrument
             * audioCallback function, to update the parameters in a transient state.
             * More precisely, this method increments the TransientTimer of all
             * parameters in transient state, and updates the internalValue of those
@@ -278,7 +278,7 @@ namespace ANGLECORE
         /**
         * Creates an empty instrument, with no parameters inside.
         */
-        AbstractInstrument();
+        BlankInstrument();
 
         /**
         * Initializes the instrument, providing it with a sample rate and number of
@@ -299,7 +299,7 @@ namespace ANGLECORE
 
         /**
         * Sends a new upper bound on the rendering block size to the 
-        * AbstractInstrument. This usually triggers memory allocation, to prepare
+        * BlankInstrument. This usually triggers memory allocation, to prepare
         * for rendering future audio blocks of size \p maxSamplesPerBlock.
         * @param[in] maxSamplesPerBlock New maximum block size to use for
         *   rendering.
@@ -380,14 +380,84 @@ namespace ANGLECORE
     /**
     * \class Instrument Instrument.h
     * This abstract class can be used to create audio instruments.
-    * Just like the AbstractInstrument class, it manages internal
+    * Just like the BlankInstrument class, it manages internal
     * parameters automatically, and is capable of smoothing any
     * parameter change. However, it features default parameters
     * that can be monitored through dedicated methods. These
     * parameters are: frequency to play, velocity, and gain.
     */
-    class Instrument : public AbstractInstrument
+    class Instrument : public BlankInstrument
     {
+    public:
 
+        /**
+        * Creates a BlankInstrument, and populates it with three parameters:
+        * a frequency to play for the next audio block, a velocity, and a gain.
+        */
+        Instrument();
+
+        /**
+        * Requests the Instrument to play a new frequency.
+        * Note that a sequence of multiple calls to this method will result in only
+        * the most recent request to be proceeded for the next audio block.
+        * @param[in] frequency   New frequency to use for rendering
+        * @param[in] changeShouldBeSmooth   Indicates if the frequency should change
+        *   instantaneously or go through a transient phase
+        * @param[in] durationInSamples  Number of samples the transient phase should
+        *   last
+        */
+        void requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples);
+
+        /**
+        * Requests the Instrument to use a new velocity to play.
+        * Note that a sequence of multiple calls to this method will result in only
+        * the most recent request to be proceeded for the next audio block.
+        * @param[in] velocity   New velocity to use for rendering
+        * @param[in] changeShouldBeSmooth   Indicates if the velocity should change
+        *   instantaneously or go through a transient phase
+        * @param[in] durationInSamples  Number of samples the transient phase should
+        *   last
+        */
+        void requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples);
+
+        /**
+        * Requests the Instrument to change the gain.
+        * Note that a sequence of multiple calls to this method will result in only
+        * the most recent request to be proceeded for the next audio block.
+        * @param[in] gain   New gain to apply where necessary during rendering
+        * @param[in] changeShouldBeSmooth   Indicates if the gain should change
+        *   instantaneously or go through a transient phase
+        * @param[in] durationInSamples  Number of samples the transient phase should
+        *   last
+        */
+        void requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples);
+
+    protected:
+
+        /**
+        * Retrieve the frequency to play at a certain \p index in the current audio
+        * block being rendered.
+        * @param[in] index  Positing in the current audio block
+        */
+        double frequencyToPlay(uint32_t index);
+
+        /**
+        * Retrieve the velocity for a certain \p index in the current audio block
+        * being rendered.
+        * @param[in] index  Positing in the current audio block
+        */
+        double velocity(uint32_t index);
+
+        /**
+        * Retrieve the gain to use for a certain \p index in the current audio block
+        * being rendered.
+        * @param[in] index  Positing in the current audio block
+        */
+        double gain(uint32_t index);
+
+    private:
+        static const char* PARAMETER_ID_FREQUENCY_TO_PLAY;
+        static const char* PARAMETER_ID_VELOCITY;
+        static const char* PARAMETER_ID_GAIN;
     };
 }
