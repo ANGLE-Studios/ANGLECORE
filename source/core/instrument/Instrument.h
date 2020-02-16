@@ -57,8 +57,9 @@ namespace ANGLECORE
             * \struct TransientTimer Instrument.h
             * When a parameter is in a transient state and changes towards
             * a new value, this structure can store how close the parameter
-            * is to its target value (in terms of remaining samples). Also,
-            * this structure contains a mutex for trade-safe operations.
+            * is to its target value (in terms of remaining samples).
+            * Additionally,  this structure contains a mutex for
+            * trade-safe operations.
             */
             struct TransientTimer
             {
@@ -69,8 +70,9 @@ namespace ANGLECORE
             * \struct ChangeRequest Instrument.h
             * When the end-user asks to change a parameter from an instrument
             * (volume, etc.), an instance of this structure is created to
-            * store all necessary information about that ChangeRequest. Also,
-            * this structure contains a mutex for trade-safe operations.
+            * store all necessary information about that ChangeRequest.
+            * Additionally, this structure contains a mutex for
+            * trade-safe operations.
             */
             struct ChangeRequest
             {
@@ -92,7 +94,7 @@ namespace ANGLECORE
         /**
         * \class ParameterRenderer Instrument.h
         * A ParameterRenderer is an object that prerenders the values of
-        * all the parameters of an instrument to prepare the latterfor its
+        * all the parameters of an instrument to prepare the latter for its
         * audioCallback. A ParameterRenderer typically computes any smooth
         * parameter change or modulation in advance, so that the instrument
         * can subsequently do its rendering in a row.
