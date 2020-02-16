@@ -77,7 +77,7 @@ PARAMETER RENDERER
 
 setSampleRate()
 
-1.	Compute the minSmoothingSamples à partir du nouveau sampleRate et de minSmoothingDuration
+1.	Compute the minSmoothingSamples from the new sampleRate and minSmoothingDuration
 
 setMaxSamplesPerBlock()
 
