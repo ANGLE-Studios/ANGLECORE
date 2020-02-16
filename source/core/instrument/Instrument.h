@@ -188,12 +188,18 @@ namespace ANGLECORE
             /**
             * Creates a parameter renderer dedicated to a set of parameters, usually
             * those of a single BlankInstrument.
+            * Before the renderer receives any sample rate, m_minSmoothingSamples is
+            * set to 0.
             * @param[in] parameters&    Reference to the parameter set to be rendered
             *   through this renderer.
             * @param[in] minimalSmoothingDuration   Minimal duration of all transient
             *   phases when using this renderer.
             */
-            ParameterRenderer(std::unordered_map<const char*, std::shared_ptr<Parameter>>& parameters, double minimalSmoothingDuration);
+            ParameterRenderer(std::unordered_map<const char*, std::shared_ptr<Parameter>>& parameters, double minimalSmoothingDuration) :
+                m_parameters(parameters),
+                m_minSmoothingDuration(minimalSmoothingDuration),
+                m_minSmoothingSamples(0)
+            {}
 
             /**
             * Sends a new sample rate to the ParameterRenderer.
@@ -333,12 +339,12 @@ namespace ANGLECORE
         /**
         * Returns the instrument's current sample rate.
         */
-        double sampleRate();
+        double sampleRate() const;
 
         /**
         * Returns the inverse of the instrument's current sample rate.
         */
-        double inverseSampleRate();
+        double inverseSampleRate() const;
 
         /**
         * Creates and adds a parameter to the instrument.
@@ -361,7 +367,7 @@ namespace ANGLECORE
         * @param[in] ID Identifier of the Parameter to retrieve the value from
         * @param[in] index  Positing in the current audio block
         */
-        double parameter(const char* ID, uint32_t index);
+        double parameter(const char* ID, uint32_t index) const;
 
         /**
         * Rendering method of an instrument, which is called once all the parameters
