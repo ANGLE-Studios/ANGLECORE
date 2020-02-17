@@ -56,7 +56,9 @@ namespace ANGLECORE
 
     void BaseInstrument::ParameterRenderer::setSampleRate(double sampleRate)
     {
-        m_minSmoothingSamples.store(m_minSmoothingDuration * sampleRate);
+        m_minSmoothingSamples.store(static_cast<uint32_t>(m_minSmoothingDuration * sampleRate));
+        /* Note that we should actually add an extra sample when the result of the
+        * multiplication is not an integer (which should be rare) */
     }
 
     void BaseInstrument::ParameterRenderer::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)
