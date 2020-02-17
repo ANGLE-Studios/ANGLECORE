@@ -270,7 +270,7 @@ namespace ANGLECORE
                                 transientTracker.increment = increment;
                             }
 
-                            /* CHANGING THE PARAMETER'S STATE (2/3)
+                            /* CHANGING THE PARAMETER'S STATE (3/3)
                             ***************************************/
 
                             /*
