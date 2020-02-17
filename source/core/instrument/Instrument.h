@@ -57,17 +57,19 @@ namespace ANGLECORE
         struct Parameter
         {
             /**
-            * \struct TransientTimer Instrument.h
-            * When a parameter is in a transient state and changes towards a new
-            * value, this structure can store how close the parameter is to its
-            * target value (in terms of remaining samples).
+            * \struct TransientTracker Instrument.h
+            * A TransientTracker tracks a Parameter's position while in a transient
+            * state. This structure can store how close the Parameter is to its
+            * target value (in terms of remaining samples), as well as the increment
+            * to use for its update.
             * Additionally, this structure contains a mutex for trade-safe operations.
             */
-            struct TransientTimer
+            struct TransientTracker
             {
                 std::mutex lock;
                 uint32_t transientDurationInSamples;
                 uint32_t position;
+                double increment;
             };
 
             /**
@@ -155,7 +157,7 @@ namespace ANGLECORE
             std::atomic<double> internalValue;
             std::unique_ptr<std::vector<double>> transientCurve;
             ChangeRequestDeposit changeRequestDeposit;
-            TransientTimer transientTimer;
+            TransientTracker transientTracker;
 
             /**
             * Creates a parameter with a fixed smoothing technique.
@@ -244,7 +246,7 @@ namespace ANGLECORE
             * block of size \p blockSize.
             * This method is called at the end of an BaseInstrument
             * audioCallback function, to update the parameters in a transient state.
-            * More precisely, this method increments the TransientTimer of all
+            * More precisely, this method increments the TransientTracker of all
             * parameters in transient state, and updates the internalValue of those
             * to their latest value.
             * @param[in] blockSize  Size of the audio block that has just been

@@ -69,7 +69,7 @@ audioCallback()
 2.	If the instrument has not been initialized, do nothing
 3.	Else asks the parameterRenderer to render all necessary parameters by calling its renderParametersForNextAudioBlock method
 4.	Call renderNextAudioBlock
-5.	Call the incrementTransientTimers method from the parameterRenderer
+5.	Call the updateParametersAfterRendering method from the parameterRenderer
 
 
 PARAMETER RENDERER
@@ -97,7 +97,7 @@ renderParametersForNextAudioBlock()
 7.	Unlock the unique_lock mutex
 8.	Read the collected data and check if smoothChange is true
 9.	If it is not, then change the parameter’s internal value to its newValue atomically
-10.	If it is, then open a second scope {{}} and lock the transientTimer with a lock_guard lock to write into it
+10.	If it is, then open a second scope {{}} and lock the transientTracker with a lock_guard lock to write into it
 11.	Copy the durationInSamples of the ChangeRequest variable into the timer
 12.	Set the position to 0
 13.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
@@ -112,7 +112,7 @@ renderParametersForNextAudioBlock()
 21.	Unlock the unique_lock mutex
 22.	Read the collected data and check if smoothChange is true
 23.	If it is not, then change the parameter’s internal value to its newValue atomically
-24.	If it is, then open a second scope {{}} and lock the transientTimer with a lock_guard lock to write into it
+24.	If it is, then open a second scope {{}} and lock the transientTracker with a lock_guard lock to write into it
 25.	Copy the durationInSamples of the ChangeRequest variable into the timer
 26.	Set the position to 0
 27.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
@@ -123,7 +123,7 @@ updateParametersAfterRendering()
 
 1.	For all parameters in TRANSIENT state, set the internalValue to the last value in the transientCurve
 // There is an unaddressed data race here, as the end-user could force a parameter into a STEADY state through a non-smooth change before the internalValue is updated, but after the test on the state is done. This would lead the end-user’s request to be ignored, which is ok regarding the probability of this happening.
-2.	Then lock the transientTimer
+2.	Then lock the transientTracker
 3.	Increment the position by numSamples
 4.	If the position ends up being beyond the transientDurationInSamples (which is likely to have already been detected when computing the transientCurve), then change the parameter’s state to STEADY
 
