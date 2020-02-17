@@ -113,6 +113,13 @@ namespace ANGLECORE
                 std::mutex lock;
                 bool newChangeRequestReceived;
                 ChangeRequest data;
+
+                /**
+                * Initializes all the const members of the internal ChangeRequest.
+                */
+                ChangeRequestDeposit() :
+                    data(0, false, 0)
+                {}
             };
 
             /**
