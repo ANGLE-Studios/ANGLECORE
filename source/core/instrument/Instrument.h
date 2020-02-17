@@ -43,12 +43,12 @@ namespace ANGLECORE
     };
     
     /**
-    * \class BlankInstrument Instrument.h
+    * \class BaseInstrument Instrument.h
     * This abstract class can be used to create audio instruments that manage internal
     * parameters automatically. The Instrument class also provides that functionnality,
     * with the additional benefit of also providing default parameters.
     */
-    class BlankInstrument
+    class BaseInstrument
     {
         /**
         * \struct Parameter Instrument.h
@@ -187,7 +187,7 @@ namespace ANGLECORE
 
             /**
             * Creates a parameter renderer dedicated to a set of parameters, usually
-            * those of a single BlankInstrument.
+            * those of a single BaseInstrument.
             * Before the renderer receives any sample rate, m_minSmoothingSamples is
             * set to 0.
             * @param[in] parameters&    Reference to the parameter set to be rendered
@@ -221,7 +221,7 @@ namespace ANGLECORE
             /**
             * Instructs the renderer to render all of the parameters it is attached
             * to.
-            * This method is called at the beginning of an BlankInstrument
+            * This method is called at the beginning of an BaseInstrument
             * audioCallback function, in order to precompute the values of all
             * parameters for the next audio block to render. Depending on each
             * parameter's state, the renderer will trigger different computations,
@@ -235,7 +235,7 @@ namespace ANGLECORE
             /**
             * Updates the state of every parameter after having rendered an audio
             * block of size \p blockSize.
-            * This method is called at the end of an BlankInstrument
+            * This method is called at the end of an BaseInstrument
             * audioCallback function, to update the parameters in a transient state.
             * More precisely, this method increments the TransientTimer of all
             * parameters in transient state, and updates the internalValue of those
@@ -284,7 +284,7 @@ namespace ANGLECORE
         /**
         * Creates an empty instrument, with no parameters inside.
         */
-        BlankInstrument();
+        BaseInstrument();
 
         /**
         * Initializes the instrument, providing it with a sample rate and number of
@@ -305,7 +305,7 @@ namespace ANGLECORE
 
         /**
         * Sends a new upper bound on the rendering block size to the 
-        * BlankInstrument. This usually triggers memory allocation, to prepare
+        * BaseInstrument. This usually triggers memory allocation, to prepare
         * for rendering future audio blocks of size \p maxSamplesPerBlock.
         * @param[in] maxSamplesPerBlock New maximum block size to use for
         *   rendering.
@@ -386,18 +386,18 @@ namespace ANGLECORE
     /**
     * \class Instrument Instrument.h
     * This abstract class can be used to create audio instruments.
-    * Just like the BlankInstrument class, it manages internal
+    * Just like the BaseInstrument class, it manages internal
     * parameters automatically, and is capable of smoothing any
     * parameter change. However, it features default parameters
     * that can be monitored through dedicated methods. These
     * parameters are: frequency to play, velocity, and gain.
     */
-    class Instrument : public BlankInstrument
+    class Instrument : public BaseInstrument
     {
     public:
 
         /**
-        * Creates a BlankInstrument, and populates it with three parameters:
+        * Creates a BaseInstrument, and populates it with three parameters:
         * a frequency to play for the next audio block, a velocity, and a gain.
         */
         Instrument();

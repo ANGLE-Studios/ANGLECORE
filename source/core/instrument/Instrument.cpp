@@ -29,7 +29,7 @@ namespace ANGLECORE
     /*  Parameter
     ************************************/
 
-    BlankInstrument::Parameter::Parameter(double initialValue, bool minimalSmoothing, SmoothingMethod smoothingMethod) :
+    BaseInstrument::Parameter::Parameter(double initialValue, bool minimalSmoothing, SmoothingMethod smoothingMethod) :
         state(INITIAL),
         minimalSmoothingEnabled(minimalSmoothing),
         smoothingMethod(smoothingMethod),
@@ -42,7 +42,7 @@ namespace ANGLECORE
         changeRequestDeposit.newChangeRequestReceived = false;
     }
 
-    void BlankInstrument::Parameter::initialize(uint32_t maxSamplesPerBlock)
+    void BaseInstrument::Parameter::initialize(uint32_t maxSamplesPerBlock)
     {
         /* By construction, transientCurve is never a null pointer */
         transientCurve->reserve(maxSamplesPerBlock);
@@ -54,12 +54,12 @@ namespace ANGLECORE
     /*  ParameterRenderer
     ************************************/
 
-    void BlankInstrument::ParameterRenderer::setSampleRate(double sampleRate)
+    void BaseInstrument::ParameterRenderer::setSampleRate(double sampleRate)
     {
         m_minSmoothingSamples.store(m_minSmoothingDuration * sampleRate);
     }
 
-    void BlankInstrument::ParameterRenderer::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)
+    void BaseInstrument::ParameterRenderer::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)
     {
         /*
         * For each parameter, we reserve the necessary capacity in the transient
@@ -70,7 +70,7 @@ namespace ANGLECORE
             it.second->initialize(maxSamplesPerBlock);
     }
 
-    void BlankInstrument::ParameterRenderer::renderParametersForNextAudioBlock(uint32_t blockSize)
+    void BaseInstrument::ParameterRenderer::renderParametersForNextAudioBlock(uint32_t blockSize)
     {
         /*
         * First step is to update all parameters. This is done once, and only at the
@@ -84,56 +84,56 @@ namespace ANGLECORE
         }
     }
 
-    void BlankInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t blockSize)
+    void BaseInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t blockSize)
     {
         // TO DO
     }
 
-    /*  BlankInstrument
+    /*  BaseInstrument
     ************************************/
 
-    BlankInstrument::BlankInstrument() :
+    BaseInstrument::BaseInstrument() :
         m_parameterRenderer(m_parameters, ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION)
     {
         // TO DO
     }
 
-    void BlankInstrument::initialize(double sampleRate, uint32_t maxSamplesPerBlock)
+    void BaseInstrument::initialize(double sampleRate, uint32_t maxSamplesPerBlock)
     {
         // TO DO
     }
 
-    void BlankInstrument::setSampleRate(double sampleRate)
+    void BaseInstrument::setSampleRate(double sampleRate)
     {
         // TO DO
     }
 
-    void BlankInstrument::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)
+    void BaseInstrument::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)
     {
         // TO DO
     }
 
-    void BlankInstrument::requestParameterChange(const char* ID, double newValue, bool changeShouldBeSmooth, uint32_t durationInSamples)
+    void BaseInstrument::requestParameterChange(const char* ID, double newValue, bool changeShouldBeSmooth, uint32_t durationInSamples)
     {
         // TO DO
     }
 
-    double BlankInstrument::sampleRate() const
+    double BaseInstrument::sampleRate() const
     {
         // TO DO
     }
 
-    double BlankInstrument::inverseSampleRate() const
+    double BaseInstrument::inverseSampleRate() const
     {
         // TO DO
     }
 
-    void BlankInstrument::addParameter(const char* ID, double initialValue, bool minimalSmoothing, Parameter::SmoothingMethod smoothingMethod)
+    void BaseInstrument::addParameter(const char* ID, double initialValue, bool minimalSmoothing, Parameter::SmoothingMethod smoothingMethod)
     {
         // TO DO
     }
 
-    double BlankInstrument::parameter(const char* ID, uint32_t index) const
+    double BaseInstrument::parameter(const char* ID, uint32_t index) const
     {
         // TO DO
     }

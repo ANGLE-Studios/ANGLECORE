@@ -1,7 +1,7 @@
-ABSTRACT INSTRUMENT
+﻿BASE INSTRUMENT
 ===================
 
-AbstractInstrument()
+BaseInstrument()
 
 1.	Sets the internal state to INITIAL
 
