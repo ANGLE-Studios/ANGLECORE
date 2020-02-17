@@ -80,12 +80,22 @@ namespace ANGLECORE
             */
             struct ChangeRequest
             {
-                const double targetValue;
-                const bool smoothChange;
-                const uint32_t durationInSamples;
+                double targetValue;
+                bool smoothChange;
+                uint32_t durationInSamples;
 
                 /**
-                * Initializes all the const members of a ChangeRequest.
+                * Creates a null ChangeRequest, which instructs to instantly set a
+                * Parameter to 0 in a duration of 0 samples.
+                */
+                ChangeRequest() :
+                    targetValue(0),
+                    smoothChange(false),
+                    durationInSamples(0)
+                {}
+
+                /**
+                * Initializes all the members of a ChangeRequest.
                 * @param[in] newValue   Target value for the parameter required to
                 *   change. This parameter will simply be copied into targetValue.
                 * @param[in] shouldBeSmooth Indicates if the parameter should change

@@ -56,6 +56,10 @@ namespace ANGLECORE
 
     void BaseInstrument::ParameterRenderer::setSampleRate(double sampleRate)
     {
+        /*
+        * This function is called only when the sampleRate really takes a new value.
+        */
+
         m_minSmoothingSamples.store(static_cast<uint32_t>(m_minSmoothingDuration * sampleRate));
         /* Note that we should actually add an extra sample when the result of the
         * multiplication is not an integer (which should be rare) */
@@ -74,15 +78,250 @@ namespace ANGLECORE
 
     void BaseInstrument::ParameterRenderer::renderParametersForNextAudioBlock(uint32_t blockSize)
     {
+        /*  We first ensure that blockSize is at least one : */
+        if (blockSize == 0)
+            return;
+
         /*
-        * First step is to update all parameters. This is done once, and only at the
-        * beginning of the block rendering. It is not done at the end, just to be
-        * sure we perform updates only if necessary, that is only if we are asked to
-        * render an audio block
+        * First step is to update all parameters, which means updating their. This is done once, and only at the
+        * beginning of the block rendering, which means it is only performed if we
+        * are asked to render an audio block.
         */
         for (auto& it : m_parameters)
         {
-            // TO DO
+            /*
+            * Note that internal pointers to Parameter cannot be null by
+            * construction, so there is no need to test for nullptr.
+            */
+            std::shared_ptr<Parameter> parameter = it.second;
+
+            Parameter::State state = parameter->state.load();
+
+            switch (state)
+            {
+            case Parameter::State::INITIAL:
+
+                /*
+                * If the parameter is in its initial state, there is nothing to do.
+                * The parameter will return its internalValue when rendered.
+                */
+                break;
+
+            case Parameter::State::STEADY:
+            case Parameter::State::TRANSIENT:
+
+                /*
+                * We create a scope, which is necessary for initializing objects
+                * within a switch statement, but also ensures the mutexes inside
+                * will be unlocked on destruction.
+                */
+                {
+                    /*
+                    * If the parameter is in a steady state, we need to check for a
+                    * possible ChangeRequest in the ChangeRequestDeposit
+                    */
+                    Parameter::ChangeRequest changeRequest;
+
+                    /* We lock the parameter's ChangeRequestDeposit to read inside */
+                    std::unique_lock<std::mutex> scopedLockOnDeposit(parameter->changeRequestDeposit.lock);
+
+                    /* Have we received a new change request? ... */
+                    if (parameter->changeRequestDeposit.newChangeRequestReceived)
+                    {
+                        /*
+                        * ... YES we have!
+                        * So we copy the ChangeRequest newly received. It is assumed
+                        * copying a double, a boolean and an unsigned int is fast
+                        * enough (O(1)) to let us hold the mutex without any
+                        * consequence, and without requiring to use a pointer swap
+                        * for efficiency instead.
+                        */
+                        changeRequest = parameter->changeRequestDeposit.data;
+
+                        scopedLockOnDeposit.unlock();
+
+                        /*
+                        * Is that change request supposed to be smooth?
+                        * Note that a smooth change of 0 samples is considered
+                        * instantaneous, and treated as such in the code:
+                        */
+                        if (changeRequest.smoothChange && changeRequest.durationInSamples > 0)
+                        {
+
+                            /* PREPARING THE TRANSIENT CURVE (1/3) 
+                            **************************************/
+
+                            std::vector<double>& curve = *parameter->transientCurve;
+
+                            /*
+                            * Although blockSize is supposed to be always smaller
+                            * than maxSamplesPerBlock, which implies that the
+                            * transient curve is supposed to be always larger than
+                            * blockSize, we still want to ensure to access it
+                            * in-range in case the plugin is used with a buggy host.
+                            * Therefore we still test our index variables against
+                            * the size of the transient curve.
+                            */
+
+                            size_t curveSize = curve.size();
+
+                            /*
+                            * We then need to compute the curve's increment, which
+                            * we first initialize:
+                            */
+                            double increment = 0.0;
+                            switch (parameter->smoothingMethod)
+                            {
+                            case Parameter::SmoothingMethod::ADDITIVE:
+                                increment = 0.0;
+                                break;
+                            case Parameter::SmoothingMethod::MULTIPLICATIVE:
+                                increment = 1.0;
+                                break;
+                            }
+
+                            /*
+                            * We atomically read the internalValue of the parameter,
+                            * which is its initial value when following a transient
+                            * curve.
+                            */
+                            double startValue = parameter->internalValue.load();
+
+                            /*
+                            * We know that changeRequest.durationInSamples > 0, so
+                            * there is no need to test for a division by 0 here:
+                            */
+                            switch (parameter->smoothingMethod)
+                            {
+                            case Parameter::SmoothingMethod::ADDITIVE:
+                                increment = (changeRequest.targetValue - startValue) / changeRequest.durationInSamples;
+                                break;
+                            case Parameter::SmoothingMethod::MULTIPLICATIVE:
+
+                                /*
+                                * Here we use the Taylor series of the exponential
+                                * function, which is faster than using the C
+                                * exponential function itself. However, because the
+                                * change requested may be over a few samples, we
+                                * need to go to order 2 so that we do not loose to
+                                * much precision.
+                                */
+                                /* TO DO: ADD THE BENCHMARK */
+                                /* TO DO: TREAT THE CASE OF TARGET_VALUE = 0 ! */
+                                double epsilon = (log(changeRequest.targetValue) - log(startValue)) / changeRequest.durationInSamples;
+                                increment = 1.0 + epsilon + epsilon * epsilon / 2;
+                                break;
+                            }
+
+                            if (curveSize >= 1)
+                            {
+                                curve[0] = parameter->internalValue.load();
+
+                                size_t blockSize_size_t = static_cast<size_t>(blockSize);
+                                size_t size = blockSize_size_t < curveSize ? blockSize_size_t : curveSize;
+
+                                switch (parameter->smoothingMethod)
+                                {
+                                case Parameter::SmoothingMethod::ADDITIVE:
+
+                                    /*
+                                    * The first value of the transient curve has
+                                    * already been set, so we start the counter from
+                                    * 1:
+                                    */
+                                    for (size_t i = 1; i < size; i++)
+                                    {
+                                        curve[i] = curve[i - 1] + increment;
+                                    }
+                                    break;
+
+                                case Parameter::SmoothingMethod::MULTIPLICATIVE:
+
+                                    /*
+                                    * The first value of the transient curve has
+                                    * already been set, so we start the counter from
+                                    * 1:
+                                    */
+                                    for (size_t i = 1; i < size; i++)
+                                    {
+                                        curve[i] = curve[i - 1] * increment;
+                                    }
+                                    break;
+                                }
+                            }
+
+                            /* UPDATING THE TRANSIENT TRACKER (2/3)
+                            ***************************************/
+
+                            /*
+                            * We create a reference to the parameter's transient
+                            * tracker in order to make the code easier to read.
+                            */
+                            Parameter::TransientTracker& transientTracker(parameter->transientTracker);
+
+                            /* (We create a scope for the following mutex to be
+                            * unlocked on destruction...) */
+                            {
+                                /* We lock the parameter's TransientTracker */
+                                std::lock_guard<std::mutex> scopedLockOnTransientTracker(transientTracker.lock);
+
+                                transientTracker.transientDurationInSamples = changeRequest.durationInSamples;
+                                transientTracker.position = 0;
+                                transientTracker.increment = increment;
+                            }
+
+                            /* CHANGING THE PARAMETER'S STATE (2/3)
+                            ***************************************/
+
+                            /*
+                            * We can finally change the parameter’s state to
+                            * TRANSIENT. This change needs to be done after the
+                            * transient curve has been prepared, so that the
+                            * parameter still renders as its internalValue in the
+                            * meantime (the parameter will still be considered
+                            * STEADY from the outside).
+                            */
+                            parameter->state.store(Parameter::State::TRANSIENT);
+                        }
+
+                        /*
+                        * Else, if the change request is supposed to be
+                        * instantaneous:
+                        */
+                        else
+                        {
+                            /*
+                            * If however the change is supposed to be instantaneous,
+                            * then we simply need to change the parameter's
+                            * internalValue. This is done atomically.
+                            */
+                            parameter->internalValue.store(changeRequest.targetValue);
+
+                            /*
+                            * An non-smooth change forces the parameter into a
+                            * steady state:
+                            */
+                            parameter->state.store(Parameter::State::STEADY);
+                        }
+
+                        /*
+                        * Whether the change request should be smooth or not, the
+                        * change request should be marked as read. This is done by
+                        * simply informing the ChangeRequestDeposit that there is no
+                        * more ChangeRequest.
+                        */
+                        scopedLockOnDeposit.lock();
+                        parameter->changeRequestDeposit.newChangeRequestReceived = false;
+                        scopedLockOnDeposit.unlock();
+                    }
+
+                    /*
+                    * Else, no change request has been received, so we do nothing.
+                    */
+                }
+
+                break;
+            }
         }
     }
 
@@ -107,7 +346,11 @@ namespace ANGLECORE
 
     void BaseInstrument::setSampleRate(double sampleRate)
     {
-        // TO DO
+        /*
+        * Increasing the sampleRate leads to memory reallocation, which can be an
+        * expensive operation, so the sampleRate is changed only if the received
+        * value is new.
+        */
     }
 
     void BaseInstrument::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)

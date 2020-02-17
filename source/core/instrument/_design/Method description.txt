@@ -98,7 +98,7 @@ renderParametersForNextAudioBlock()
 8.	Read the collected data and check if smoothChange is true
 9.	If it is not, then change the parameter’s internal value to its newValue atomically
 10.	If it is, then open a second scope {{}} and lock the transientTracker with a lock_guard lock to write into it
-11.	Copy the durationInSamples of the ChangeRequest variable into the timer
+11.	Copy the durationInSamples of the ChangeRequest variable into the tracker
 12.	Set the position to 0
 13.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
 14.	Fill in the vector with the smoothing curve for the next audio block to render, starting with the internalValue
