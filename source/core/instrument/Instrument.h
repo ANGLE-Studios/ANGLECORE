@@ -67,6 +67,7 @@ namespace ANGLECORE
             struct TransientTracker
             {
                 std::mutex lock;
+                double targetValue;
                 uint32_t transientDurationInSamples;
                 uint32_t position;
                 double increment;

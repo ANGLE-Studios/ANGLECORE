@@ -78,25 +78,21 @@ namespace ANGLECORE
 
     void BaseInstrument::ParameterRenderer::renderParametersForNextAudioBlock(uint32_t blockSize)
     {
-        /*  We first ensure that blockSize is at least one : */
+        /*  We first ensure that blockSize is at least one: */
         if (blockSize == 0)
             return;
 
-        /*
-        * First step is to update all parameters, which means updating their. This is done once, and only at the
-        * beginning of the block rendering, which means it is only performed if we
-        * are asked to render an audio block.
-        */
+        /* And then we render each parameter: */
         for (auto& it : m_parameters)
         {
             /*
-            * Note that internal pointers to Parameter cannot be null by
-            * construction, so there is no need to test for nullptr.
+            * Note that shared pointers to Parameter cannot be null by construction,
+            * so there is no need to test for nullptr.
             */
-            std::shared_ptr<Parameter> parameter = it.second;
+            Parameter& parameter = *it.second;
 
-            Parameter::State state = parameter->state.load();
-
+            Parameter::State state = parameter.state.load();
+                
             switch (state)
             {
             case Parameter::State::INITIAL:
@@ -118,40 +114,47 @@ namespace ANGLECORE
                 {
                     /*
                     * If the parameter is in a steady state, we need to check for a
-                    * possible ChangeRequest in the ChangeRequestDeposit
+                    * possible ChangeRequest in the ChangeRequestDeposit.
                     */
                     Parameter::ChangeRequest changeRequest;
 
                     /* We lock the parameter's ChangeRequestDeposit to read inside */
-                    std::unique_lock<std::mutex> scopedLockOnDeposit(parameter->changeRequestDeposit.lock);
+                    std::unique_lock<std::mutex> scopedLockOnDeposit(parameter.changeRequestDeposit.lock);
 
                     /* Have we received a new change request? ... */
-                    if (parameter->changeRequestDeposit.newChangeRequestReceived)
+                    if (parameter.changeRequestDeposit.newChangeRequestReceived)
                     {
                         /*
                         * ... YES we have!
-                        * So we copy the ChangeRequest newly received. It is assumed
-                        * copying a double, a boolean and an unsigned int is fast
+                        * So we copy the newly received ChangeRequest. It is assumed
+                        * copying a double, a boolean, and an unsigned int is fast
                         * enough (O(1)) to let us hold the mutex without any
                         * consequence, and without requiring to use a pointer swap
                         * for efficiency instead.
                         */
-                        changeRequest = parameter->changeRequestDeposit.data;
+                        changeRequest = parameter.changeRequestDeposit.data;
+
+                        /*
+                        * Now that the copy is done, the change request should be
+                        * marked as read. This is done by simply informing the
+                        * ChangeRequestDeposit that there is no more ChangeRequest.
+                        */
+                        parameter.changeRequestDeposit.newChangeRequestReceived = false,
 
                         scopedLockOnDeposit.unlock();
 
                         /*
                         * Is that change request supposed to be smooth?
                         * Note that a smooth change of 0 samples is considered
-                        * instantaneous, and treated as such in the code:
+                        * instantaneous, and treated as such:
                         */
                         if (changeRequest.smoothChange && changeRequest.durationInSamples > 0)
                         {
 
-                            /* PREPARING THE TRANSIENT CURVE (1/3) 
+                            /* PREPARING THE TRANSIENT CURVE (1/3)
                             **************************************/
 
-                            std::vector<double>& curve = *parameter->transientCurve;
+                            std::vector<double>& curve = *parameter.transientCurve;
 
                             /*
                             * Although blockSize is supposed to be always smaller
@@ -163,14 +166,14 @@ namespace ANGLECORE
                             * the size of the transient curve.
                             */
 
-                            size_t curveSize = curve.size();
+                            uint32_t curveSize = static_cast<uint32_t>(curve.size());
 
                             /*
                             * We then need to compute the curve's increment, which
                             * we first initialize:
                             */
                             double increment = 0.0;
-                            switch (parameter->smoothingMethod)
+                            switch (parameter.smoothingMethod)
                             {
                             case Parameter::SmoothingMethod::ADDITIVE:
                                 increment = 0.0;
@@ -185,13 +188,13 @@ namespace ANGLECORE
                             * which is its initial value when following a transient
                             * curve.
                             */
-                            double startValue = parameter->internalValue.load();
+                            double startValue = parameter.internalValue.load();
 
                             /*
                             * We know that changeRequest.durationInSamples > 0, so
                             * there is no need to test for a division by 0 here:
                             */
-                            switch (parameter->smoothingMethod)
+                            switch (parameter.smoothingMethod)
                             {
                             case Parameter::SmoothingMethod::ADDITIVE:
                                 increment = (changeRequest.targetValue - startValue) / changeRequest.durationInSamples;
@@ -209,18 +212,17 @@ namespace ANGLECORE
                                 /* TO DO: ADD THE BENCHMARK */
                                 /* TO DO: TREAT THE CASE OF TARGET_VALUE = 0 ! */
                                 double epsilon = (log(changeRequest.targetValue) - log(startValue)) / changeRequest.durationInSamples;
-                                increment = 1.0 + epsilon + epsilon * epsilon / 2;
+                                increment = 1.0 + epsilon + epsilon * epsilon * 0.5;
                                 break;
                             }
 
                             if (curveSize >= 1)
                             {
-                                curve[0] = parameter->internalValue.load();
+                                curve[0] = startValue;
 
-                                size_t blockSize_size_t = static_cast<size_t>(blockSize);
-                                size_t size = blockSize_size_t < curveSize ? blockSize_size_t : curveSize;
+                                uint32_t size = blockSize < curveSize ? blockSize : curveSize;
 
-                                switch (parameter->smoothingMethod)
+                                switch (parameter.smoothingMethod)
                                 {
                                 case Parameter::SmoothingMethod::ADDITIVE:
 
@@ -229,7 +231,7 @@ namespace ANGLECORE
                                     * already been set, so we start the counter from
                                     * 1:
                                     */
-                                    for (size_t i = 1; i < size; i++)
+                                    for (uint32_t i = 1; i < size; i++)
                                     {
                                         curve[i] = curve[i - 1] + increment;
                                     }
@@ -257,7 +259,7 @@ namespace ANGLECORE
                             * We create a reference to the parameter's transient
                             * tracker in order to make the code easier to read.
                             */
-                            Parameter::TransientTracker& transientTracker(parameter->transientTracker);
+                            Parameter::TransientTracker& transientTracker(parameter.transientTracker);
 
                             /* (We create a scope for the following mutex to be
                             * unlocked on destruction...) */
@@ -265,6 +267,7 @@ namespace ANGLECORE
                                 /* We lock the parameter's TransientTracker */
                                 std::lock_guard<std::mutex> scopedLockOnTransientTracker(transientTracker.lock);
 
+                                transientTracker.targetValue = changeRequest.targetValue;
                                 transientTracker.transientDurationInSamples = changeRequest.durationInSamples;
                                 transientTracker.position = 0;
                                 transientTracker.increment = increment;
@@ -281,11 +284,11 @@ namespace ANGLECORE
                             * meantime (the parameter will still be considered
                             * STEADY from the outside).
                             */
-                            parameter->state.store(Parameter::State::TRANSIENT);
+                            parameter.state.store(Parameter::State::TRANSIENT);
                         }
 
                         /*
-                        * Else, if the change request is supposed to be
+                        * Else, if the change request is required to be
                         * instantaneous:
                         */
                         else
@@ -295,28 +298,24 @@ namespace ANGLECORE
                             * then we simply need to change the parameter's
                             * internalValue. This is done atomically.
                             */
-                            parameter->internalValue.store(changeRequest.targetValue);
+                            parameter.internalValue.store(changeRequest.targetValue);
 
                             /*
-                            * An non-smooth change forces the parameter into a
+                            * Any non-smooth change forces the parameter into a
                             * steady state:
                             */
-                            parameter->state.store(Parameter::State::STEADY);
+                            parameter.state.store(Parameter::State::STEADY);
                         }
-
-                        /*
-                        * Whether the change request should be smooth or not, the
-                        * change request should be marked as read. This is done by
-                        * simply informing the ChangeRequestDeposit that there is no
-                        * more ChangeRequest.
-                        */
-                        scopedLockOnDeposit.lock();
-                        parameter->changeRequestDeposit.newChangeRequestReceived = false;
-                        scopedLockOnDeposit.unlock();
                     }
 
+                    // TO DO: Compute the transient curve for a TRANSIENT > TRANSIENT transition
+
+                    // TO DO FOR ALL => TAKE CARE OF THE CASE WHERE THE TARGET VALUE IS REACHED BEFORE THE END OF BLOCK_SIZE
+
                     /*
-                    * Else, no change request has been received, so we do nothing.
+                    * Else, no change request has been received.
+                    * The unique_lock will automatically unlock the deposit's mutex
+                    * on its destruction.
                     */
                 }
 
@@ -328,6 +327,26 @@ namespace ANGLECORE
     void BaseInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t blockSize)
     {
         // TO DO
+        
+        /*
+        for (auto& it : m_parameters)
+        {
+            Parameter& parameter = *it.second;
+
+            Parameter::State state = parameter.state.load();
+
+            if (state == Parameter::State::TRANSIENT)
+            {
+                std::unique_lock<std::mutex> scopedLockTracker(parameter.transientTracker.lock);
+                if (parameter.transientTracker.position >= parameter.transientTracker.transientDurationInSamples)
+                {
+                    parameter.internalValue.store(parameter.transientTracker.targetValue);
+                    scopedLockTracker.unlock();
+                    parameter.state.store(Parameter::State::STEADY);
+                }
+            }
+        }
+        */
     }
 
     /*  BaseInstrument
