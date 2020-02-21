@@ -467,9 +467,7 @@ namespace ANGLECORE
 
     void BaseInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t blockSize)
     {
-        // TO DO
         
-        /*
         for (auto& it : m_parameters)
         {
             Parameter& parameter = *it.second;
@@ -478,7 +476,29 @@ namespace ANGLECORE
 
             if (state == Parameter::State::TRANSIENT)
             {
+                /*
+                * For any parameter in a transient state, the first thing to do is
+                * to update the parameter's internal value according to the last
+                * value found in its transient curve. Note that the parameter's
+                * pointer to its transient curve cannot be null by construction.
+                */
+                const std::vector<double>& curve = *parameter.transientCurve;
+                if (!curve.empty())
+                    parameter.internalValue.store(curve.back());
+
+                /*
+                * Next step is to increment the parameter's position. We need to
+                * lock the transientTracker first for that:
+                */
                 std::unique_lock<std::mutex> scopedLockTracker(parameter.transientTracker.lock);
+
+                /*
+                * We increment the tracker's position by blockSize, since we have
+                * just rendered an audio block of size 'blockSize':
+                */
+                parameter.transientTracker.position += blockSize;
+
+                /* Afterwards, we check for a potential transient end: */
                 if (parameter.transientTracker.position >= parameter.transientTracker.transientDurationInSamples)
                 {
                     parameter.internalValue.store(parameter.transientTracker.targetValue);
@@ -487,7 +507,6 @@ namespace ANGLECORE
                 }
             }
         }
-        */
     }
 
     /*  BaseInstrument
