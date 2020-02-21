@@ -467,7 +467,7 @@ namespace ANGLECORE
 
     void BaseInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t blockSize)
     {
-        
+        /* We iterate through all parameters for post-rendering update: */
         for (auto& it : m_parameters)
         {
             Parameter& parameter = *it.second;
@@ -515,12 +515,23 @@ namespace ANGLECORE
     BaseInstrument::BaseInstrument() :
         m_parameterRenderer(m_parameters, ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION)
     {
-        // TO DO
+        m_state.store(INITIAL);
     }
 
     void BaseInstrument::initialize(double sampleRate, uint32_t maxSamplesPerBlock)
     {
-        // TO DO
+        /*
+        * We simply call the dedicated methods for setting a new sampleRate and
+        * maxSamplesPerBlock:
+        */
+        setSampleRate(sampleRate);
+        setMaxSamplesPerBlock(maxSamplesPerBlock);
+
+        /*
+        * Afterwards, we push the instrument into a READY_TO_PLAY state.
+        * This method is the only one that can do that.
+        */
+        m_state.store(READY_TO_PLAY);
     }
 
     void BaseInstrument::setSampleRate(double sampleRate)
@@ -530,11 +541,23 @@ namespace ANGLECORE
         * expensive operation, so the sampleRate is changed only if the received
         * value is new.
         */
+        if (sampleRate != m_sampleRate.load().value) {
+
+            /* First we update the InverseUnion: */
+            InverseUnion<double> newSampleRate;
+            newSampleRate.value = sampleRate;
+            newSampleRate.inverse = 1.0 / sampleRate;
+            m_sampleRate.store(newSampleRate);
+
+            /* And then we send the new sample rate to the parameter renderer: */
+            m_parameterRenderer.setSampleRate(sampleRate);
+        }
+
     }
 
     void BaseInstrument::setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock)
     {
-        // TO DO
+        m_parameterRenderer.setMaxSamplesPerBlock(maxSamplesPerBlock);
     }
 
     void BaseInstrument::requestParameterChange(const char* ID, double newValue, bool changeShouldBeSmooth, uint32_t durationInSamples)
@@ -544,17 +567,33 @@ namespace ANGLECORE
 
     double BaseInstrument::sampleRate() const
     {
-        // TO DO
+        /*
+        * This method should only be used once per render block, because it requires
+        * a copy of the sampleRate InverseUnion.
+        */
+        return m_sampleRate.load().value;
     }
 
     double BaseInstrument::inverseSampleRate() const
     {
-        // TO DO
+        /*
+        * This method should only be used once per render block, because it requires
+        * a copy of the sampleRate InverseUnion.
+        */
+        return m_sampleRate.load().inverse;
     }
 
     void BaseInstrument::addParameter(const char* ID, double initialValue, bool minimalSmoothing, Parameter::SmoothingMethod smoothingMethod)
     {
-        // TO DO
+        /* We construct a parameter: */
+        std::shared_ptr<Parameter> parameter = std::make_shared<Parameter>(initialValue, minimalSmoothing, smoothingMethod);
+
+        /*
+        * And then we add it to the parameter map. Note that adding a parameter
+        * which ID is already used by another parameter in the map will replace
+        * the old parameter by the new.
+        */
+        m_parameters[ID] = parameter;
     }
 
     double BaseInstrument::parameter(const char* ID, uint32_t index) const

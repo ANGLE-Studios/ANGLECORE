@@ -357,12 +357,16 @@ namespace ANGLECORE
     protected:
 
         /**
-        * Returns the instrument's current sample rate.
+        * Returns the instrument's current sample rate. This should only be used
+        * once per render block, because it requires a copy of the sampleRate
+        * InverseUnion.
         */
         double sampleRate() const;
 
         /**
-        * Returns the inverse of the instrument's current sample rate.
+        * Returns the inverse of the instrument's current sample rate. This should
+        * only be used once per render block, because it requires a copy of the
+        * sampleRate InverseUnion.
         */
         double inverseSampleRate() const;
 
