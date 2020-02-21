@@ -371,6 +371,15 @@ namespace ANGLECORE
                             uint32_t size = blockSize < curveSize ? blockSize : curveSize;
 
                             Parameter::TransientTracker& transientTracker(parameter.transientTracker);
+
+                            /*
+                            * To detect the case of an ending transient, we need to
+                            * compute the transient's remaining samples. We use a
+                            * substraction of two uint32 for that, which should not
+                            * overflow, as a parameter still in TRANSIENT state at
+                            * this stage should always verify:
+                            * position < transientDurationInSamples.
+                            */
                             uint32_t remainingSamples = transientTracker.transientDurationInSamples - transientTracker.position;
 
                             switch (parameter.smoothingMethod)
