@@ -28,6 +28,8 @@
 #include <atomic>
 #include <unordered_map>
 
+#include "../../utility/StringView.h"
+
 namespace ANGLECORE
 {
     /** 
@@ -215,7 +217,7 @@ namespace ANGLECORE
             * @param[in] minimalSmoothingDuration   Minimal duration of all transient
             *   phases when using this renderer.
             */
-            ParameterRenderer(std::unordered_map<const char*, std::shared_ptr<Parameter>>& parameters, double minimalSmoothingDuration) :
+            ParameterRenderer(std::unordered_map<ANGLECORE::StringView, std::shared_ptr<Parameter>>& parameters, double minimalSmoothingDuration) :
                 m_parameters(parameters),
                 m_minSmoothingDuration(minimalSmoothingDuration),
                 m_minSmoothingSamples(0)
@@ -270,7 +272,7 @@ namespace ANGLECORE
             /**
             * Reference to a set of parameters owned by an instrument.
             */
-            std::unordered_map<const char*, std::shared_ptr<Parameter>>& m_parameters;
+            std::unordered_map<ANGLECORE::StringView, std::shared_ptr<Parameter>>& m_parameters;
 
             /**
             * Minimal smoothing duration to apply when rendering, in seconds.
@@ -402,7 +404,7 @@ namespace ANGLECORE
     private:
         std::atomic<State> m_state;
         std::atomic<InverseUnion<double>> m_sampleRate;
-        std::unordered_map<const char*, std::shared_ptr<Parameter>> m_parameters;
+        std::unordered_map<ANGLECORE::StringView, std::shared_ptr<Parameter>> m_parameters;
         ParameterRenderer m_parameterRenderer;
         /** TO ADD: AudioBuffer m_internalBuffer */
     };
