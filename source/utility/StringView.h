@@ -57,6 +57,7 @@ namespace ANGLECORE
     {
         /**
         * The constructor simply stores the provided pointer to C string internally.
+        * It hereby provides an implicit conversion from const char* to StringView.
         */
         StringView(const char* str) :
             string_ptr(str)
