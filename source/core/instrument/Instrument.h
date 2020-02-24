@@ -389,11 +389,21 @@ namespace ANGLECORE
 
         /**
         * Retrieve the value of a Parameter at a certain \p index in the current
-        * audio block being rendered.
+        * audio block being rendered. The method should be inline, as it may be
+        * called a lot of times during rendering.
         * @param[in] ID Identifier of the Parameter to retrieve the value from
         * @param[in] index  Positing in the current audio block
         */
-        double parameter(const char* ID, uint32_t index) const;
+        inline double parameter(const char* ID, uint32_t index) const;
+
+        /**
+        * Retrieve a const Parameter for rendering. This method should be preferred
+        * to the parameter(ID, index) method which tests the parameter's state on
+        * each call. The method should be inline, as it may be called a lot of times
+        * during rendering.
+        * @param[in] ID Identifier of the Parameter to retrieve the value from
+        */
+        inline const std::shared_ptr<const Parameter> parameter(const char* ID) const;
 
         /**
         * Rendering method of an instrument, which is called once all the parameters

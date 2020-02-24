@@ -160,6 +160,11 @@ namespace ANGLECORE
                             /* COMPUTING THE TRANSIENT CURVE (1/3)
                             **************************************/
 
+                            /*
+                            * The transientCurve pointer cannot be null by
+                            * construction (make_unique is called in the Parameter's
+                            * constructor).
+                            */
                             std::vector<double>& curve = *parameter.transientCurve;
 
                             /*
@@ -562,7 +567,61 @@ namespace ANGLECORE
 
     void BaseInstrument::requestParameterChange(const char* ID, double newValue, bool changeShouldBeSmooth, uint32_t durationInSamples)
     {
+        /* We retrieve the parameter from the unordered_map */
+        auto& it = m_parameters.find(ID);
+
+        /*
+        * We check if the parameter has been found, and if yes, if the pointer to
+        * the parameter is not null (which should actually always be the case)...
+        */
+        if (it != m_parameters.end() && it->second)
+        {
+            Parameter& parameter = *it->second;
+
+            if (changeShouldBeSmooth)
+            {
+                Parameter::ChangeRequestDeposit& changeRequestDeposit = parameter.changeRequestDeposit;
+
+                std::lock_guard<std::mutex> scopedLockDeposit(changeRequestDeposit.lock);
+                changeRequestDeposit.data.targetValue = newValue;
+                changeRequestDeposit.data.smoothChange = true;
+                changeRequestDeposit.data.durationInSamples = durationInSamples;
+                changeRequestDeposit.newChangeRequestReceived = true;
+            }
+            else
+            {
+                /*
+                * Here we implement an instant change without posting a change
+                * request to the deposit. Note that this actually means only smooth
+                * ChangeRequest are posted in the deposit, and instant changes are
+                * always performed instantly, without latency.
+                */
+
+                parameter.internalValue.store(newValue);
+
+                /*
+                * Any non-smooth change forces the parameter into a steady state.
+                */
+                parameter.state.store(Parameter::State::STEADY);
+            }
+        }
+    }
+
+    void BaseInstrument::audioCallback()
+    {
         // TO DO
+        switch (m_state.load())
+        {
+        case BaseInstrument::State::INITIAL:
+            return;
+        case BaseInstrument::State::READY_TO_PLAY:
+            /*
+            m_parameterRenderer.renderParametersForNextAudioBlock(size);
+            renderNextAudioBlock();
+            m_parameterRenderer.updateParametersAfterRendering();
+            */
+            break;
+        }
     }
 
     double BaseInstrument::sampleRate() const
@@ -591,14 +650,63 @@ namespace ANGLECORE
         /*
         * And then we add it to the parameter map. Note that adding a parameter
         * which ID is already used by another parameter in the map will replace
-        * the old parameter by the new.
+        * the old parameter by the new one.
         */
         m_parameters[ID] = parameter;
     }
 
     double BaseInstrument::parameter(const char* ID, uint32_t index) const
     {
-        // TO DO
+        /* We retrieve the parameter from the unordered_map */
+        auto& it = m_parameters.find(ID);
+
+        /*
+        * We check if the parameter has been found, and if yes, if the pointer to
+        * the parameter is not null (which should actually always be the case)...
+        */
+        if (it != m_parameters.end() && it->second)
+        {
+            /*
+            * ... and if so, we return the parameter's value at index according to
+            * its internal state.
+            */
+
+            const Parameter& parameter = *it->second;
+
+            switch (parameter.state.load())
+            {
+            case Parameter::State::STEADY:
+                return parameter.internalValue.load();
+            case Parameter::State::TRANSIENT:
+
+                /*
+                * If we are out of bound, we return the internal value. Note that
+                * the transientCurve pointer cannot be null by construction
+                * (make_unique is called in the Parameter's constructor).
+                */
+                if (index < static_cast<uint32_t>(parameter.transientCurve->size()))
+                    return (*parameter.transientCurve)[index];
+                else
+                    return parameter.internalValue.load();
+            }
+        }
+
+        /* In case of any other trouble than the out-of-bound, we simply return 0 */
+        return 0.0;
+    }
+
+    const std::shared_ptr<const BaseInstrument::Parameter> BaseInstrument::parameter(const char* ID) const
+    {
+        /*
+        * We retrieve the parameter from the unordered_map, and check if we have
+        * found the parameter.
+        */
+        auto& it = m_parameters.find(ID);
+        if (it != m_parameters.end())
+            return it->second;
+
+        /* If we have not found a parameter, we return a null shared pointer */
+        return nullptr;
     }
 
     /*  Instrument

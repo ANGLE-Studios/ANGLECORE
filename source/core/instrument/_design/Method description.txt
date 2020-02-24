@@ -45,7 +45,7 @@ requestParameterChange()
 
 1.	Retrieve the parameter from the m_parameters unordered_map
 2.	If the parameter does not exist (also test nullptr to be safe), return without exception
-3.	Else check if the changeShouldBeSmooth is equal to trye
+3.	Else check if the changeShouldBeSmooth is equal to true
 4.	If so, retrieve the changeRequestDeposit by reference
 5.	Lock its mutex with a lock_guard (RAII)
 6.	Write the change information into data, and last, mark a new change request has arrived
@@ -127,7 +127,7 @@ updateParametersAfterRendering()
 General notes
 =============
 
-// Note 1: the only way the end-user can change a parameter’s state is through an instant change into a STEADY state (i.e. through a non-smooth change request). Otherwise, the state of the parameter can only be changed within the renderNextAudioBlock class, though methods that are called by the ParameterRenderer or the Instrument itself in a proper ordering.
+// Note 1: the only way the end-user can change a parameter’s state is through an instant change into a STEADY state (i.e. through a non-smooth change request). Otherwise, the state of the parameter can only be changed within the renderNextAudioBlock class, through methods that are called by the ParameterRenderer or the Instrument itself in a proper ordering.
 
 // Note 2: the transientCurve may be the subject of a data race
 
