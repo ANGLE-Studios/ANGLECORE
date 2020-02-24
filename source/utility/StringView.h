@@ -28,8 +28,8 @@
 /**
 * In order to avoid unnecessary copies and memory allocations when manipulating an
 * STL key-value containers (map, unordered_map, etc.), it is definitely tempting to
-* use C strings instead of std::string as a key type. This especially makes sense in
-* the context of the Instrument class, where Parameters are stored in an
+* use const char* instead of std::string as a key type. This especially makes sense
+* in the context of the Instrument class, where Parameters are stored in an
 * unordered_map that is likely to be heavily solicited when rendering an audio
 * block.
 * However, in order to use C string keys (const char*) in those containers, one
@@ -77,21 +77,23 @@ namespace ANGLECORE
     };
 }
 
-/**
-* In order to be used as a key within a standard key-value container, a StringView
-* must have a dedicated hash function. Otherwise, only the internal pointer will be
-* hashed, which will not produced the desired effect. Therefore, we have to
-* specialize the standard hash structure to our StringView type.
-*/
+/* We need to specialize the std::hash method, so we open a new namespace scope: */
 namespace std {
+
+    /**
+    * In order to be used as a key within a standard key-value container, a StringView
+    * must have a dedicated hash function. Otherwise, only the internal pointer will be
+    * hashed, which will not produced the desired effect. Therefore, we have to
+    * specialize the standard hash structure to our StringView type.
+    */
     template<>
     struct hash<ANGLECORE::StringView>
     {
         size_t operator()(const ANGLECORE::StringView& view) const
         {
-            /* Here we simply implement the hash function of the boost library: */
+            /* This hash function comes from the boost library */
             size_t hashValue = 0;
-            for (const char* p = view.string_ptr; *p; p++)
+            for (const char* p = view.string_ptr; p && *p; p++)
                 hashValue ^= *p + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
             return hashValue;
         }
