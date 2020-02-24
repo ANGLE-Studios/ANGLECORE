@@ -716,38 +716,41 @@ namespace ANGLECORE
     const char* Instrument::PARAMETER_ID_VELOCITY = "ANGLECORE_PARAMETER_VELOCITY";
     const char* Instrument::PARAMETER_ID_GAIN = "ANGLECORE_PARAMETER_GAIN";
 
-    Instrument::Instrument()
+    Instrument::Instrument() :
+        BaseInstrument()
     {
-        // TO DO
+        addParameter(PARAMETER_ID_FREQUENCY_TO_PLAY, 0.0, true, Parameter::SmoothingMethod::MULTIPLICATIVE);
+        addParameter(PARAMETER_ID_VELOCITY, 0.0, false, Parameter::SmoothingMethod::ADDITIVE);
+        addParameter(PARAMETER_ID_GAIN, 0.0, true, Parameter::SmoothingMethod::MULTIPLICATIVE);
     }
 
     void Instrument::requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples)
     {
-        // TO DO
+        requestParameterChange(PARAMETER_ID_FREQUENCY_TO_PLAY, frequency, changeShouldBeSmooth, durationInSamples);
     }
 
     void Instrument::requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples)
     {
-        // TO DO
+        requestParameterChange(PARAMETER_ID_VELOCITY, velocity, changeShouldBeSmooth, durationInSamples);
     }
 
     void Instrument::requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples)
     {
-        // TO DO
+        requestParameterChange(PARAMETER_ID_GAIN, gain, changeShouldBeSmooth, durationInSamples);
     }
 
     double Instrument::frequencyToPlay(uint32_t index)
     {
-        // TO DO
+        return parameter(PARAMETER_ID_FREQUENCY_TO_PLAY, index);
     }
 
     double Instrument::velocity(uint32_t index)
     {
-        // TO DO
+        return parameter(PARAMETER_ID_VELOCITY, index);
     }
 
     double Instrument::gain(uint32_t index)
     {
-        // TO DO
+        return parameter(PARAMETER_ID_GAIN, index);
     }
 }

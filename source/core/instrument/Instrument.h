@@ -52,6 +52,8 @@ namespace ANGLECORE
     */
     class BaseInstrument
     {
+    protected:
+
         /**
         * \struct Parameter Instrument.h
         * Represents a parameter that an instrument can modify and use for rendering.
@@ -448,7 +450,7 @@ namespace ANGLECORE
         * @param[in] durationInSamples  Number of samples the transient phase should
         *   last
         */
-        void requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples);
+        inline void requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
         /**
         * Requests the Instrument to use a new velocity to play.
@@ -460,7 +462,7 @@ namespace ANGLECORE
         * @param[in] durationInSamples  Number of samples the transient phase should
         *   last
         */
-        void requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples);
+        inline void requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
         /**
         * Requests the Instrument to change the gain.
@@ -472,7 +474,7 @@ namespace ANGLECORE
         * @param[in] durationInSamples  Number of samples the transient phase should
         *   last
         */
-        void requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples);
+        inline void requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
     protected:
 
@@ -481,21 +483,21 @@ namespace ANGLECORE
         * block being rendered.
         * @param[in] index  Positing in the current audio block
         */
-        double frequencyToPlay(uint32_t index);
+        inline double frequencyToPlay(uint32_t index);
 
         /**
         * Retrieve the velocity for a certain \p index in the current audio block
         * being rendered.
         * @param[in] index  Positing in the current audio block
         */
-        double velocity(uint32_t index);
+        inline double velocity(uint32_t index);
 
         /**
         * Retrieve the gain to use for a certain \p index in the current audio block
         * being rendered.
         * @param[in] index  Positing in the current audio block
         */
-        double gain(uint32_t index);
+        inline double gain(uint32_t index);
 
     private:
         static const char* PARAMETER_ID_FREQUENCY_TO_PLAY;
