@@ -150,11 +150,14 @@ namespace ANGLECORE
                         scopedLockOnDeposit.unlock();
 
                         /*
-                        * Is that change request supposed to be smooth?
+                        * Should we perform a smooth change?
                         * Note that a smooth change of 0 samples is considered
-                        * instantaneous, and treated as such:
+                        * instantaneous, and treated as such. A instantaneous
+                        * ChangeRequest sent to a parameter with
+                        * minimalSmoothingEnabled will trigger a smooth change.
                         */
-                        if (changeRequest.smoothChange && changeRequest.durationInSamples > 0)
+                        bool smoothChangeRequested = changeRequest.smoothChange && changeRequest.durationInSamples > 0;
+                        if (smoothChangeRequested || parameter.minimalSmoothingEnabled)
                         {
 
                             /* COMPUTING THE TRANSIENT CURVE (1/3)
@@ -166,6 +169,18 @@ namespace ANGLECORE
                             * constructor).
                             */
                             std::vector<double>& curve = *parameter.transientCurve;
+
+                            /*
+                            * We need to compute the transient's duration in terms
+                            * of samples. Depending on the reason we have to perform
+                            * a smooth change (minimal smoothing or regular smooth
+                            * ChangeRequest ?), the value will be calculated
+                            * differently.
+                            */
+                            uint32_t minSmoothingSamples = m_minSmoothingSamples.load();
+                            uint32_t transientDurationInSamples = minSmoothingSamples;
+                            if (smoothChangeRequested)
+                                transientDurationInSamples = parameter.minimalSmoothingEnabled ? fmax(minSmoothingSamples, changeRequest.durationInSamples) : changeRequest.durationInSamples;
 
                             /*
                             * We then need to compute the curve's increment, which
@@ -181,13 +196,13 @@ namespace ANGLECORE
                             double startValue = parameter.internalValue.load();
 
                             /*
-                            * We know that changeRequest.durationInSamples > 0, so
-                            * there is no need to test for a division by 0 here:
+                            * We know that transientDurationInSamples > 0, so there
+                            * is no need to test for a division by 0 here.
                             */
                             switch (parameter.smoothingMethod)
                             {
                             case Parameter::SmoothingMethod::ADDITIVE:
-                                increment = (changeRequest.targetValue - startValue) / changeRequest.durationInSamples;
+                                increment = (changeRequest.targetValue - startValue) / transientDurationInSamples;
                                 break;
                             case Parameter::SmoothingMethod::MULTIPLICATIVE:
 
@@ -200,7 +215,7 @@ namespace ANGLECORE
                                 * much precision.
                                 */
                                 double endValue = fmax(changeRequest.targetValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
-                                double epsilon = (log(endValue) - log(startValue)) / changeRequest.durationInSamples;
+                                double epsilon = (log(endValue) - log(startValue)) / transientDurationInSamples;
                                 increment = 1.0 + epsilon + epsilon * epsilon * 0.5;
                                 break;
                             }
@@ -233,7 +248,7 @@ namespace ANGLECORE
                                     * transient, which would use less than a block
                                     * of size blockSize to complete:
                                     */
-                                    if (changeRequest.durationInSamples < size)
+                                    if (transientDurationInSamples < size)
                                     {
                                         /*
                                         * If the transient is very short, then we
@@ -244,9 +259,9 @@ namespace ANGLECORE
                                         * transient curve has already been set at
                                         * index 0, we start the counter from 1:
                                         */
-                                        for (uint32_t i = 1; i < changeRequest.durationInSamples; i++)
+                                        for (uint32_t i = 1; i < transientDurationInSamples; i++)
                                             curve[i] = curve[i - 1] + increment;
-                                        for (uint32_t i = changeRequest.durationInSamples; i < size; i++)
+                                        for (uint32_t i = transientDurationInSamples; i < size; i++)
                                             curve[i] = changeRequest.targetValue;
                                     }
                                     else
@@ -266,7 +281,7 @@ namespace ANGLECORE
                                     * transient, which would use less than a block
                                     * of size blockSize to complete:
                                     */
-                                    if (changeRequest.durationInSamples < size)
+                                    if (transientDurationInSamples < size)
                                     {
                                         /*
                                         * If the transient is very short, then we
@@ -277,9 +292,9 @@ namespace ANGLECORE
                                         * transient curve has already been set at
                                         * index 0, we start the counter from 1:
                                         */
-                                        for (uint32_t i = 1; i < changeRequest.durationInSamples; i++)
+                                        for (uint32_t i = 1; i < transientDurationInSamples; i++)
                                             curve[i] = curve[i - 1] * increment;
-                                        for (uint32_t i = changeRequest.durationInSamples; i < size; i++)
+                                        for (uint32_t i = transientDurationInSamples; i < size; i++)
                                             curve[i] = changeRequest.targetValue;
                                     }
                                     else
@@ -311,7 +326,7 @@ namespace ANGLECORE
                                 std::lock_guard<std::mutex> scopedLockOnTransientTracker(transientTracker.lock);
 
                                 transientTracker.targetValue = changeRequest.targetValue;
-                                transientTracker.transientDurationInSamples = changeRequest.durationInSamples;
+                                transientTracker.transientDurationInSamples = transientDurationInSamples;
                                 transientTracker.position = 0;
                                 transientTracker.increment = increment;
                             }
@@ -578,31 +593,43 @@ namespace ANGLECORE
         {
             Parameter& parameter = *it->second;
 
-            if (changeShouldBeSmooth)
+            /*
+            * If the change is supposed to be instantaneous and the parameter does
+            * not have minimalSmoothingEnabled, then we can use a shortcut and
+            * directly switch the parameter's internal state and value. Note that
+            * this is the only case where an immediate change is performed with zero
+            * latency, and without posting a ChangeRequest. In every other case, a
+            * ChangeRequest is posted and processed in the next audio block. Also
+            * note that a smooth change request of duration 0 is treated as an
+            * instantaneous change request. Therefore, we also need to test for that
+            * specific case when checking if we can take the shortcut.
+            */
+            if ((!changeShouldBeSmooth && !parameter.minimalSmoothingEnabled) ||
+                (changeShouldBeSmooth && durationInSamples == 0 && !parameter.minimalSmoothingEnabled))
             {
-                Parameter::ChangeRequestDeposit& changeRequestDeposit = parameter.changeRequestDeposit;
-
-                std::lock_guard<std::mutex> scopedLockDeposit(changeRequestDeposit.lock);
-                changeRequestDeposit.data.targetValue = newValue;
-                changeRequestDeposit.data.smoothChange = true;
-                changeRequestDeposit.data.durationInSamples = durationInSamples;
-                changeRequestDeposit.newChangeRequestReceived = true;
-            }
-            else
-            {
-                /*
-                * Here we implement an instant change without posting a change
-                * request to the deposit. Note that this actually means only smooth
-                * ChangeRequest are posted in the deposit, and instant changes are
-                * always performed instantly, without latency.
-                */
-
+                /* Shortcut for setting the parameter's value instantly */
                 parameter.internalValue.store(newValue);
 
                 /*
                 * Any non-smooth change forces the parameter into a steady state.
                 */
                 parameter.state.store(Parameter::State::STEADY);
+            }
+            else
+            {
+                Parameter::ChangeRequestDeposit& changeRequestDeposit = parameter.changeRequestDeposit;
+
+                /*
+                * We lock the ChangeRequestDeposit and post a new ChangeRequest into
+                * it. Note that we do not create an unecessary ChangeRequest
+                * instance here: we directly copy the request's arguments into the
+                * ChangeRequestDeposit.
+                */
+                std::lock_guard<std::mutex> scopedLockDeposit(changeRequestDeposit.lock);
+                changeRequestDeposit.data.targetValue = newValue;
+                changeRequestDeposit.data.smoothChange = changeShouldBeSmooth;
+                changeRequestDeposit.data.durationInSamples = durationInSamples;
+                changeRequestDeposit.newChangeRequestReceived = true;
             }
         }
     }
