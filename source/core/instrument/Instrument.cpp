@@ -416,7 +416,7 @@ namespace ANGLECORE
                                     * If the transient is very short, then we
                                     * first fill the transient samples (from
                                     * index 0 to remainingSamples-1), and then we
-                                    * fill the rest of the curve with the end value
+                                    * fill the rest of the curve with the end value.
                                     * And since the first value of the transient
                                     * curve has already been set at index 0, we
                                     * start the counter from 1:
@@ -450,7 +450,7 @@ namespace ANGLECORE
                                     * If the transient is very short, then we
                                     * first fill the transient samples (from
                                     * index 0 to remainingSamples-1), and then we
-                                    * fill the rest of the curve with the end value
+                                    * fill the rest of the curve with the end value.
                                     * And since the first value of the transient
                                     * curve has already been set at index 0, we
                                     * start the counter from 1:
@@ -732,7 +732,7 @@ namespace ANGLECORE
         if (it != m_parameters.end())
             return it->second;
 
-        /* If we have not found a parameter, we return a null shared pointer */
+        /* If we have not found the parameter, we return a null shared pointer */
         return nullptr;
     }
 
@@ -746,7 +746,7 @@ namespace ANGLECORE
     Instrument::Instrument() :
         BaseInstrument()
     {
-        addParameter(PARAMETER_ID_FREQUENCY_TO_PLAY, 0.0, true, Parameter::SmoothingMethod::MULTIPLICATIVE);
+        addParameter(PARAMETER_ID_FREQUENCY_TO_PLAY, 0.0, false, Parameter::SmoothingMethod::MULTIPLICATIVE);
         addParameter(PARAMETER_ID_VELOCITY, 0.0, false, Parameter::SmoothingMethod::ADDITIVE);
         addParameter(PARAMETER_ID_GAIN, 0.0, true, Parameter::SmoothingMethod::MULTIPLICATIVE);
     }
