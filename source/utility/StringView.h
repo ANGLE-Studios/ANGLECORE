@@ -35,7 +35,7 @@
 * However, in order to use C string keys (const char*) in those containers, one
 * needs to define a structure for automatically hashing and comparing C strings.
 * In C++17, the std::string_view type seems perfectly suited for the job, but in
-* earlier C++ versions, there is no such convenient feature. This commit proposes a
+* earlier C++ versions, there is no such convenient feature. This file proposes a
 * solution for C++11 and later versions: the ANGLECORE::StringView structure.
 */
 
@@ -72,7 +72,7 @@ namespace ANGLECORE
             return strcmp(string_ptr, other.string_ptr) == 0;
         }
 
-        /* This is the internal pointer to the C string hold by the view */
+        /** This is the internal pointer to the C string being viewed */
         const char* string_ptr;
     };
 }
@@ -83,7 +83,7 @@ namespace std {
     /**
     * In order to be used as a key within a standard key-value container, a StringView
     * must have a dedicated hash function. Otherwise, only the internal pointer will be
-    * hashed, which will not produced the desired effect. Therefore, we have to
+    * hashed, which will not produce the desired effect. Therefore, we have to
     * specialize the standard hash structure to our StringView type.
     */
     template<>
