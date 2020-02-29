@@ -22,7 +22,10 @@
 
 #include "Instrument.h"
 
+#include <algorithm>
+
 #include "../../config/AudioConfig.h"
+#include "../../math/FastMath.h"
 
 namespace ANGLECORE
 {
@@ -171,7 +174,7 @@ namespace ANGLECORE
                             std::vector<double>& curve = *parameter.transientCurve;
 
                             /*
-                            * We need to compute the transient's duration in terms
+                            * STEP 1: we compute the transient's duration in terms
                             * of samples. Depending on the reason we have to perform
                             * a smooth change (minimal smoothing or regular smooth
                             * ChangeRequest ?), the value will be calculated
@@ -180,20 +183,65 @@ namespace ANGLECORE
                             uint32_t minSmoothingSamples = m_minSmoothingSamples.load();
                             uint32_t transientDurationInSamples = minSmoothingSamples;
                             if (smoothChangeRequested)
-                                transientDurationInSamples = parameter.minimalSmoothingEnabled ? fmax(minSmoothingSamples, changeRequest.durationInSamples) : changeRequest.durationInSamples;
+                                transientDurationInSamples = parameter.minimalSmoothingEnabled ? std::max(minSmoothingSamples, changeRequest.durationInSamples) : changeRequest.durationInSamples;
 
                             /*
-                            * We then need to compute the curve's increment, which
-                            * we first initialize:
+                            * STEP 2: we compute the curve's bounds, i.e. the start
+                            * and end value of the transient.
+                            */
+
+                            /*
+                            * We start by reading the parameter's internal value
+                            * atomically:
+                            */
+                            double parameterInternalValue = parameter.internalValue.load();
+
+                            /*
+                            * The curve's bounds are initialized to the parameter's
+                            * internal value. Therefore, if the smoothing method is
+                            * not recognized for some reason, then the change will
+                            * have no effect, except minor unnecessary computations.
+                            */
+                            double startValue = parameterInternalValue;
+                            double endValue = parameterInternalValue;
+                            switch (parameter.smoothingMethod)
+                            {
+                            case Parameter::SmoothingMethod::ADDITIVE:
+
+                                /*
+                                * Here the startValue should be set to the
+                                * parameter's internal value, which is already the
+                                * case, so we only need to set the endValue:
+                                */
+                                endValue = changeRequest.targetValue;
+                                break;
+
+                            case Parameter::SmoothingMethod::MULTIPLICATIVE:
+                                
+                                /*
+                                * The transient should start on the parameter's
+                                * internal value. If however that value is zero,
+                                * then we have a problem: the multiplicative
+                                * increment will result in a sequence of zeros.
+                                * Therefore, we need to use a minimum level as a
+                                * start value instead.
+                                */
+                                double startValue = fmax(parameterInternalValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
+
+                                /*
+                                * The same problem should be adressed for the end
+                                * value.
+                                */
+                                double endValue = fmax(changeRequest.targetValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
+
+                                break;
+                            }
+
+                            /*
+                            * STEP 3: we compute the curve's increment, which we
+                            * first initialize:
                             */
                             double increment = parameter.smoothingMethod == Parameter::SmoothingMethod::MULTIPLICATIVE ? 1.0 : 0.0;
-
-                            /*
-                            * We atomically read the internalValue of the parameter,
-                            * which is its initial value when following a transient
-                            * curve.
-                            */
-                            double startValue = parameter.internalValue.load();
 
                             /*
                             * We know that transientDurationInSamples > 0, so there
@@ -202,21 +250,23 @@ namespace ANGLECORE
                             switch (parameter.smoothingMethod)
                             {
                             case Parameter::SmoothingMethod::ADDITIVE:
-                                increment = (changeRequest.targetValue - startValue) / transientDurationInSamples;
+                                increment = (endValue - startValue) / transientDurationInSamples;
                                 break;
                             case Parameter::SmoothingMethod::MULTIPLICATIVE:
 
                                 /*
-                                * Here we use the Taylor series of the exponential
-                                * function, which is faster than using the C
-                                * exponential function itself. However, because the
-                                * change requested may be over a few samples, we
-                                * need to go to order 2 so that we do not loose to
-                                * much precision.
+                                * Thanks to STEP 2, we know for sure that both
+                                * startValue and endValue are positive, so we can
+                                * call the log function on them:
                                 */
-                                double endValue = fmax(changeRequest.targetValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
                                 double epsilon = (log(endValue) - log(startValue)) / transientDurationInSamples;
-                                increment = 1.0 + epsilon + epsilon * epsilon * 0.5;
+
+                                /*
+                                * Here we use FastMath::exp to compute the
+                                * increment, which is a lot faster than using its C
+                                * counterpart, assuming: -0.5 <= epsilon <= 0.5.
+                                */
+                                increment = FastMath::exp(epsilon);
                                 break;
                             }
 

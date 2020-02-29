@@ -33,7 +33,7 @@
 namespace ANGLECORE
 {
     /** 
-    * \struct InverseUnion
+    * \struct InverseUnion Instrument.h
     * Provides a simple solution to perform atomic operations on a number and its
     * inverse.
     */
