@@ -375,7 +375,9 @@ namespace ANGLECORE
         double inverseSampleRate() const;
 
         /**
-        * Creates and adds a parameter to the instrument.
+        * Creates and adds a parameter to the instrument. Note that adding a
+        * parameter which ID is already used by another parameter will replace the
+        * old parameter by the new one.
         * This method should only be called in the instrument's constructor, as the
         * set of parameters (m_parameters) is not protected for thread-safety.
         * @param[in] ID Identifier of the Parameter to create

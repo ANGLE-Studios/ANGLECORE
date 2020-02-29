@@ -676,8 +676,8 @@ namespace ANGLECORE
 
         /*
         * And then we add it to the parameter map. Note that adding a parameter
-        * which ID is already used by another parameter in the map will replace
-        * the old parameter by the new one.
+        * which ID is already used by another parameter will replace the old
+        * parameter by the new one, since the operator [] is reference-based.
         */
         m_parameters[ID] = parameter;
     }
