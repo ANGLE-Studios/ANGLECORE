@@ -29,6 +29,7 @@
 #include <unordered_map>
 
 #include "../../utility/StringView.h"
+#include "../audio/AudioChunk.h"
 
 namespace ANGLECORE
 {
@@ -254,7 +255,7 @@ namespace ANGLECORE
             *   corresponds to the number of samples the ParameterRenderer has to
             *   prepare for all of its parameters.
             */
-            void renderParametersForNextAudioBlock(uint32_t blockSize);
+            void renderParametersForNextAudioChunk(uint32_t chunkSize);
 
             /**
             * Updates the state of every parameter after having rendered an audio
@@ -352,11 +353,10 @@ namespace ANGLECORE
         void requestParameterChange(const char* ID, double newValue, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
         /**
-        * TODO: Requests the instrument to render the next audio block, using the 
-        * MIDI messages provided in the MIDI buffer.
-        * TODO: add parameters
+        * Requests the instrument to render the next audio chunk.
+        * @param[in] audioChunkToFill   The AudioChunk to render to.
         */
-        void audioCallback(/** TO ADD: AudioBuffer, MIDIBuffer */);
+        void audioCallback(const AudioChunk<double>& audioChunkToFill);
 
     protected:
 
@@ -413,7 +413,7 @@ namespace ANGLECORE
         * Rendering method of an instrument, which is called once all the parameters
         * have been rendered.
         */
-        virtual void renderNextAudioBlock() = 0;
+        virtual void renderNextAudioChunk(const AudioChunk<double>& audioChunkToFill) = 0;
 
     private:
         std::atomic<State> m_state;

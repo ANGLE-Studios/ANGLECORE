@@ -79,10 +79,10 @@ namespace ANGLECORE
             it.second->initialize(maxSamplesPerBlock);
     }
 
-    void BaseInstrument::ParameterRenderer::renderParametersForNextAudioBlock(uint32_t blockSize)
+    void BaseInstrument::ParameterRenderer::renderParametersForNextAudioChunk(uint32_t chunkSize)
     {
-        /*  We first ensure that blockSize is at least one: */
-        if (blockSize == 0)
+        /*  We first ensure that chunkSize is at least one: */
+        if (chunkSize == 0)
             return;
 
         /* And then we render each parameter: */
@@ -271,10 +271,10 @@ namespace ANGLECORE
                             }
 
                             /*
-                            * Although blockSize is supposed to be always smaller
+                            * Although chunkSize is supposed to be always smaller
                             * than maxSamplesPerBlock, which implies that the
                             * transient curve is supposed to be always larger than
-                            * blockSize, we still want to ensure to access it
+                            * chunkSize, we still want to ensure to access it
                             * in-range in case the plugin is used with a buggy host.
                             * Therefore we still test our index variables against
                             * the size of the transient curve.
@@ -288,7 +288,7 @@ namespace ANGLECORE
                                 /* Here we also ensure to access our transientCurve
                                 * in-range, using a minimum size to fill:
                                 */
-                                uint32_t size = blockSize < curveSize ? blockSize : curveSize;
+                                uint32_t size = chunkSize < curveSize ? chunkSize : curveSize;
 
                                 switch (parameter.smoothingMethod)
                                 {
@@ -296,7 +296,7 @@ namespace ANGLECORE
 
                                     /* We need to check for a possible short
                                     * transient, which would use less than a block
-                                    * of size blockSize to complete:
+                                    * of size chunkSize to complete:
                                     */
                                     if (transientDurationInSamples < size)
                                     {
@@ -328,8 +328,8 @@ namespace ANGLECORE
                                 case Parameter::SmoothingMethod::MULTIPLICATIVE:
 
                                     /* We need to check for a possible short
-                                    * transient, which would use less than a block
-                                    * of size blockSize to complete:
+                                    * transient, which would use less than a chunk
+                                    * of size chunkSize to complete:
                                     */
                                     if (transientDurationInSamples < size)
                                     {
@@ -438,7 +438,7 @@ namespace ANGLECORE
                             /* Here we also ensure to access our transientCurve
                             * in-range, using a minimum size to fill:
                             */
-                            uint32_t size = blockSize < curveSize ? blockSize : curveSize;
+                            uint32_t size = chunkSize < curveSize ? chunkSize : curveSize;
 
                             Parameter::TransientTracker& transientTracker(parameter.transientTracker);
 
@@ -457,7 +457,7 @@ namespace ANGLECORE
                             case Parameter::SmoothingMethod::ADDITIVE:
 
                                 /* We need to check for an ending transient, which
-                                * would use less than a block of size blockSize to
+                                * would use less than a chunk of size chunkSize to
                                 * terminate:
                                 */
                                 if (remainingSamples < size)
@@ -491,7 +491,7 @@ namespace ANGLECORE
                             case Parameter::SmoothingMethod::MULTIPLICATIVE:
 
                                 /* We need to check for an ending transient, which
-                                * would use less than a block of size blockSize to
+                                * would use less than a chunk of size chunkSize to
                                 * terminate:
                                 */
                                 if (remainingSamples < size)
@@ -535,7 +535,7 @@ namespace ANGLECORE
         }
     }
 
-    void BaseInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t blockSize)
+    void BaseInstrument::ParameterRenderer::updateParametersAfterRendering(uint32_t chunkSize)
     {
         /* We iterate through all parameters for post-rendering update: */
         for (auto& it : m_parameters)
@@ -563,10 +563,10 @@ namespace ANGLECORE
                 std::unique_lock<std::mutex> scopedLockTracker(parameter.transientTracker.lock);
 
                 /*
-                * We increment the tracker's position by blockSize, since we have
-                * just rendered an audio block of size 'blockSize':
+                * We increment the tracker's position by chunkSize, since we have
+                * just rendered an audio block of size 'chunkSize':
                 */
-                parameter.transientTracker.position += blockSize;
+                parameter.transientTracker.position += chunkSize;
 
                 /* Afterwards, we check for a potential transient end: */
                 if (parameter.transientTracker.position >= parameter.transientTracker.transientDurationInSamples)
@@ -684,19 +684,26 @@ namespace ANGLECORE
         }
     }
 
-    void BaseInstrument::audioCallback()
+    void BaseInstrument::audioCallback(const AudioChunk<double>& audioChunkToFill)
     {
-        // TO DO
+        /*
+        * Depending on the instrument's state, we either perform rendering or
+        * immediately return.
+        */
         switch (m_state.load())
         {
         case BaseInstrument::State::INITIAL:
             return;
         case BaseInstrument::State::READY_TO_PLAY:
-            /*
-            m_parameterRenderer.renderParametersForNextAudioBlock(size);
-            renderNextAudioBlock();
-            m_parameterRenderer.updateParametersAfterRendering();
-            */
+
+            /* We first pre-render all the parameters for the next audio chunk: */
+            m_parameterRenderer.renderParametersForNextAudioChunk(audioChunkToFill.chunkNumSamples);
+
+            /* We then perform the core rendering of the instrument: */
+            renderNextAudioChunk(audioChunkToFill);
+
+            /* And finally we update all the parameters after rendering: */
+            m_parameterRenderer.updateParametersAfterRendering(audioChunkToFill.chunkNumSamples);
             break;
         }
     }
