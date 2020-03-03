@@ -48,7 +48,7 @@ namespace ANGLECORE
     void BaseInstrument::Parameter::initialize(uint32_t maxSamplesPerBlock)
     {
         /* By construction, transientCurve is never a null pointer */
-        transientCurve->reserve(maxSamplesPerBlock);
+        transientCurve->resize(maxSamplesPerBlock);
 
         /* Once the memory allocated, the parameter is ready for rendering */
         state.store(STEADY);
@@ -226,13 +226,13 @@ namespace ANGLECORE
                                 * Therefore, we need to use a minimum level as a
                                 * start value instead.
                                 */
-                                double startValue = fmax(parameterInternalValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
+                                startValue = fmax(parameterInternalValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
 
                                 /*
                                 * The same problem should be adressed for the end
                                 * value.
                                 */
-                                double endValue = fmax(changeRequest.targetValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
+                                endValue = fmax(changeRequest.targetValue, ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL);
 
                                 break;
                             }

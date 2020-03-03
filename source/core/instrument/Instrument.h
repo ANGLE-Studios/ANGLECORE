@@ -394,20 +394,22 @@ namespace ANGLECORE
         /**
         * Retrieve the value of a Parameter at a certain \p index in the current
         * audio block being rendered. The method should be inline, as it may be
-        * called a lot of times during rendering.
+        * called a lot of times during rendering. However it is currently not,
+        * since it would prevent users of the library from accessing it.
         * @param[in] ID Identifier of the Parameter to retrieve the value from
         * @param[in] index  Positing in the current audio block
         */
-        inline double parameter(const char* ID, uint32_t index) const;
+        double parameter(const char* ID, uint32_t index) const;
 
         /**
         * Retrieve a const Parameter for rendering. This method should be preferred
         * to the parameter(ID, index) method which tests the parameter's state on
         * each call. The method should be inline, as it may be called a lot of times
-        * during rendering.
+        * during rendering. However it is currently not, since it would prevent
+        * users of the library from accessing it.
         * @param[in] ID Identifier of the Parameter to retrieve the value from
         */
-        inline const std::shared_ptr<const Parameter> parameter(const char* ID) const;
+        const std::shared_ptr<const Parameter> parameter(const char* ID) const;
 
         /**
         * Rendering method of an instrument, which is called once all the parameters
@@ -420,7 +422,6 @@ namespace ANGLECORE
         std::atomic<InverseUnion<double>> m_sampleRate;
         std::unordered_map<StringView, std::shared_ptr<Parameter>> m_parameters;
         ParameterRenderer m_parameterRenderer;
-        /** TO ADD: AudioBuffer m_internalBuffer */
     };
 
     /**
@@ -452,7 +453,7 @@ namespace ANGLECORE
         * @param[in] durationInSamples  Number of samples the transient phase should
         *   last
         */
-        inline void requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples);
+        void requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
         /**
         * Requests the Instrument to use a new velocity to play.
@@ -464,7 +465,7 @@ namespace ANGLECORE
         * @param[in] durationInSamples  Number of samples the transient phase should
         *   last
         */
-        inline void requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples);
+        void requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
         /**
         * Requests the Instrument to change the gain.
@@ -476,7 +477,7 @@ namespace ANGLECORE
         * @param[in] durationInSamples  Number of samples the transient phase should
         *   last
         */
-        inline void requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples);
+        void requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples);
 
     protected:
 
@@ -485,21 +486,21 @@ namespace ANGLECORE
         * block being rendered.
         * @param[in] index  Positing in the current audio block
         */
-        inline double frequencyToPlay(uint32_t index);
+        double frequencyToPlay(uint32_t index);
 
         /**
         * Retrieve the velocity for a certain \p index in the current audio block
         * being rendered.
         * @param[in] index  Positing in the current audio block
         */
-        inline double velocity(uint32_t index);
+        double velocity(uint32_t index);
 
         /**
         * Retrieve the gain to use for a certain \p index in the current audio block
         * being rendered.
         * @param[in] index  Positing in the current audio block
         */
-        inline double gain(uint32_t index);
+        double gain(uint32_t index);
 
     private:
         static const char* PARAMETER_ID_FREQUENCY_TO_PLAY;

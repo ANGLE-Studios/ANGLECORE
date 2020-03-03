@@ -45,7 +45,7 @@ namespace ANGLECORE
         AudioChunk(T** rawData, unsigned short numChannels, uint32_t startSample, uint32_t numSamples) :
             rawData(rawData),
             numChannels(numChannels),
-            chunkStartSample(startSamples),
+            chunkStartSample(startSample),
             chunkNumSamples(numSamples)
         {}
     };
