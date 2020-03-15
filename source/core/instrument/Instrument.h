@@ -356,7 +356,7 @@ namespace ANGLECORE
         * Requests the instrument to render the next audio chunk.
         * @param[in] audioChunkToFill   The AudioChunk to render to.
         */
-        void audioCallback(const AudioChunk<double>& audioChunkToFill);
+        void audioCallback(AudioChunk<double>& audioChunkToFill);
 
     protected:
 
@@ -415,7 +415,7 @@ namespace ANGLECORE
         * Rendering method of an instrument, which is called once all the parameters
         * have been rendered.
         */
-        virtual void renderNextAudioChunk(const AudioChunk<double>& audioChunkToFill) = 0;
+        virtual void renderNextAudioChunk(AudioChunk<double>& audioChunkToFill) = 0;
 
     private:
         std::atomic<State> m_state;

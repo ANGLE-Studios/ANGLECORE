@@ -684,7 +684,7 @@ namespace ANGLECORE
         }
     }
 
-    void BaseInstrument::audioCallback(const AudioChunk<double>& audioChunkToFill)
+    void BaseInstrument::audioCallback(AudioChunk<double>& audioChunkToFill)
     {
         /*
         * Depending on the instrument's state, we either perform rendering or
@@ -697,13 +697,13 @@ namespace ANGLECORE
         case BaseInstrument::State::READY_TO_PLAY:
 
             /* We first pre-render all the parameters for the next audio chunk: */
-            m_parameterRenderer.renderParametersForNextAudioChunk(audioChunkToFill.chunkNumSamples);
+            m_parameterRenderer.renderParametersForNextAudioChunk(audioChunkToFill.numSamples);
 
             /* We then perform the core rendering of the instrument: */
             renderNextAudioChunk(audioChunkToFill);
 
             /* And finally we update all the parameters after rendering: */
-            m_parameterRenderer.updateParametersAfterRendering(audioChunkToFill.chunkNumSamples);
+            m_parameterRenderer.updateParametersAfterRendering(audioChunkToFill.numSamples);
             break;
         }
     }

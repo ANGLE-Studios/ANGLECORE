@@ -36,8 +36,8 @@ namespace ANGLECORE
     {
         T** const rawData;
         const unsigned short numChannels;
-        const uint32_t chunkStartSample;
-        const uint32_t chunkNumSamples;
+        const uint32_t startSample;
+        const uint32_t numSamples;
 
         /**
         * The constructor just copies the arguments into the structure's attributes.
@@ -45,10 +45,14 @@ namespace ANGLECORE
         AudioChunk(T** rawData, unsigned short numChannels, uint32_t startSample, uint32_t numSamples) :
             rawData(rawData),
             numChannels(numChannels),
-            chunkStartSample(startSample),
-            chunkNumSamples(numSamples)
+            startSample(startSample),
+            numSamples(numSamples)
         {}
 
+        /*
+        * Because we do not want the audio chunk to be assignable, we delete the
+        * assignment operator
+        */
         AudioChunk& operator=(const AudioChunk<T>& other) = delete;
     };
 }
