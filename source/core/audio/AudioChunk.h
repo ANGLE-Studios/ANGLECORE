@@ -48,5 +48,7 @@ namespace ANGLECORE
             chunkStartSample(startSample),
             chunkNumSamples(numSamples)
         {}
+
+        AudioChunk& operator=(const AudioChunk<T>& other) = delete;
     };
 }
