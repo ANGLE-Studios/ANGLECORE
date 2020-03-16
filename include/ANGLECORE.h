@@ -341,20 +341,8 @@ namespace ANGLECORE
 
         private:
 
-            /**
-            * Reference to a set of parameters owned by an instrument.
-            */
             std::unordered_map<StringView, std::shared_ptr<Parameter>>& m_parameters;
-
-            /**
-            * Minimal smoothing duration to apply when rendering, in seconds.
-            */
             const double m_minSmoothingDuration;
-
-            /**
-            * Number of samples corresponding to m_minSmoothingDuration. The
-            * conversion is done using the sample rate.
-            */
             std::atomic<uint32_t> m_minSmoothingSamples;
         };
 

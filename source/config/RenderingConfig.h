@@ -23,8 +23,7 @@
 #pragma once
 
 /**********************************************************************
-** INSTRUMENT
+** STREAM
 **********************************************************************/
 
-#define ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION 0.005   /**< Minimum duration to change the parameter of an instrument, in seconds */
-#define ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL 0.00001    /**< Minimum value to use when computing log() or multiplications during parameters' transients in an instrument */
+#define ANGLECORE_FIXED_STREAM_SIZE 256
