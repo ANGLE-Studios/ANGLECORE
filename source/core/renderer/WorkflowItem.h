@@ -26,7 +26,10 @@
 
 namespace ANGLECORE
 {
-
+    /**
+    * \struct WorkflowItem WorkflowItem.h
+    * Item of a workflow, with a unique ID.
+    */
     struct WorkflowItem
     {
         /** The ID of the workflow item. */
@@ -49,48 +52,5 @@ namespace ANGLECORE
         * protected against 4 billions item creations, so we should be safe.
         */
         static uint32_t nextId;
-    };
-
-    /*
-    =================================================
-    Stream
-    =================================================
-    */
-
-
-    /**
-    * \class Stream Stream.h
-    * Owner of a data stream used in the rendering process. The class implements
-    * RAII.
-    */
-    class Stream : public WorkflowItem
-    {
-    public:
-
-        /**
-        * Creates a stream of constant size for rendering.
-        */
-        Stream();
-
-        /**
-        * Delete the copy constructor.
-        */
-        Stream(const Stream& other) = delete;
-
-        /**
-        * Delete the stream and its internal buffer.
-        */
-        ~Stream();
-
-        /** Provides a read access to the internal buffer. */
-        const double* const getDataForReading() const;
-
-        /** Provides a write access to the internal buffer. */
-        double* const getDataForWriting();
-
-    private:
-
-        /** Internal buffer */
-        double* data;
     };
 }

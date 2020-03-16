@@ -22,42 +22,10 @@
 
 #pragma once
 
-#include <stdint.h>
+#include "WorkflowItem.h"
 
 namespace ANGLECORE
 {
-
-    struct WorkflowItem
-    {
-        /** The ID of the workflow item. */
-        uint32_t id;
-
-        /**
-        * The constructor simply defines an ID for the new item, using a static
-        * integer variable.
-        */
-        WorkflowItem();
-
-    private:
-
-        /**
-        * This static variable is used to define a unique ID for each item in the
-        * workflow. Whenever an item is created, this integer is incremented. Note
-        * that using this method for creating IDs exposes our system to possible ID
-        * duplicates, especially with overflow. This should not a problem here:
-        * since the upper limit of uint32_t is approximately 4 billions, we are
-        * protected against 4 billions item creations, so we should be safe.
-        */
-        static uint32_t nextId;
-    };
-
-    /*
-    =================================================
-    Stream
-    =================================================
-    */
-
-
     /**
     * \class Stream Stream.h
     * Owner of a data stream used in the rendering process. The class implements
