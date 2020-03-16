@@ -1,2 +1,2 @@
 # ANGLECORE
-Free and open-source Software Development Kit for audio plugin
+Free and open-source software development kit for audio plugins.

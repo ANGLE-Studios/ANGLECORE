@@ -1,7 +1,7 @@
-ABSTRACT INSTRUMENT
+﻿BASE INSTRUMENT
 ===================
 
-AbstractInstrument()
+BaseInstrument()
 
 1.	Sets the internal state to INITIAL
 
@@ -45,7 +45,7 @@ requestParameterChange()
 
 1.	Retrieve the parameter from the m_parameters unordered_map
 2.	If the parameter does not exist (also test nullptr to be safe), return without exception
-3.	Else check if the changeShouldBeSmooth is equal to trye
+3.	Else check if the changeShouldBeSmooth is equal to true
 4.	If so, retrieve the changeRequestDeposit by reference
 5.	Lock its mutex with a lock_guard (RAII)
 6.	Write the change information into data, and last, mark a new change request has arrived
@@ -69,7 +69,7 @@ audioCallback()
 2.	If the instrument has not been initialized, do nothing
 3.	Else asks the parameterRenderer to render all necessary parameters by calling its renderParametersForNextAudioBlock method
 4.	Call renderNextAudioBlock
-5.	Call the incrementTransientTimers method from the parameterRenderer
+5.	Call the updateParametersAfterRendering method from the parameterRenderer
 
 
 PARAMETER RENDERER
@@ -77,7 +77,7 @@ PARAMETER RENDERER
 
 setSampleRate()
 
-1.	Compute the minSmoothingSamples à partir du nouveau sampleRate et de minSmoothingDuration
+1.	Compute the minSmoothingSamples from the new sampleRate and minSmoothingDuration
 
 setMaxSamplesPerBlock()
 
@@ -85,52 +85,49 @@ setMaxSamplesPerBlock()
 
 renderParametersForNextAudioBlock()
 
-1.	First: update each parameter. For each parameter, look at its state
-// The parameter update is done once, and only at the beginning of a block rendering. It is not done at the end of rendering each block, just to be sure we perform updates only if necessary, that is only if we are asked to render the next audio block
+1.	If the state is INIT, do not do anything, the parameter is ready and will be rendered to its internalValue
 
-2.	If the state is INIT, do not do anything, the parameter is ready and will be rendered to its internalValue
+2.	Else if the state is STEADY, create a new empty ChangeRequest variable
+3.	Then open a new scope {} and lock the changeRequestDeposit with a unique_lock to check if there is any new change request
+4.	Test if there is a new change request through the newChangeRequestReceived boolean
+5.	If there is, copy the change request data in the aforementioned ChangeRequest variable (it is assumed copying a double, a boolean and an unsigned int is fast enough (O(1)) to let us hold the mutex without any consequence, and without requiring to use a pointer swap for efficiency).
+6.	Unlock the unique_lock mutex
+7.	Read the collected data and check if smoothChange is true
+8.	If it is not, then change the parameter’s internal value to its newValue atomically
+9.	If it is, then open a second scope {{}} and lock the transientTracker with a lock_guard lock to write into it
+10.	Copy the durationInSamples of the ChangeRequest variable into the tracker
+11.	Set the position to 0
+12.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
+13.	Fill in the vector with the smoothing curve for the next audio block to render, starting with the internalValue
+14.	And finally change the parameter’s state to TRANSIENT atomically (this change needs to be done at the end of the transient preparation scope, so that the parameter is still considered STEADY from the outside and renders to its internalValue)
+15.	If there is no change request, then do nothing. Close the scope {} here (although not necessary, it is reassuring), then add the break statement.
 
-3.	Else if the state is STEADY, create a new empty ChangeRequest variable
-4.	Then open a new scope {} and lock the changeRequestDeposit with a unique_lock to check if there is any new change request
-5.	Test if there is a new change request through the newChangeRequestReceived boolean
-6.	If there is, copy the change request data in the aforementioned ChangeRequest variable (it is assumed copying a double, a boolean and an unsigned int is fast enough (O(1)) to let us hold the mutex without any consequence, and without requiring to use a pointer swap for efficiency).
-7.	Unlock the unique_lock mutex
-8.	Read the collected data and check if smoothChange is true
-9.	If it is not, then change the parameter’s internal value to its newValue atomically
-10.	If it is, then open a second scope {{}} and lock the transientTimer with a lock_guard lock to write into it
-11.	Copy the durationInSamples of the ChangeRequest variable into the timer
-12.	Set the position to 0
-13.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
-14.	Fill in the vector with the smoothing curve for the next audio block to render, starting with the internalValue
-15.	And finally change the parameter’s state to TRANSIENT atomically (this change needs to be done at the end of the transient preparation scope, so that the parameter is still considered STEADY from the outside and renders to its internalValue)
-16.	If there is no change request, then do nothing. Close the scope {} here (although not necessary, it is reassuring), then add the break statement.
-
-17.	Else if the state is TRANSIENT, test if there is a newChangeRequest through the same method as for the STEADY state: create a new empty ChangeRequest variable
-18.	Then open a new scope {} and lock the changeRequestDeposit with a unique_lock to check if there is any new change request
-19.	Test if there is a new change request through the newChangeRequestReceived boolean
-20.	If there is, copy the change request data in the aforementioned ChangeRequest variable (it is assumed copying a double, a boolean and an unsigned int is fast enough (O(1)) to let us hold the mutex without any consequence, and without requiring to use a pointer swap for efficiency).
-21.	Unlock the unique_lock mutex
-22.	Read the collected data and check if smoothChange is true
-23.	If it is not, then change the parameter’s internal value to its newValue atomically
-24.	If it is, then open a second scope {{}} and lock the transientTimer with a lock_guard lock to write into it
-25.	Copy the durationInSamples of the ChangeRequest variable into the timer
-26.	Set the position to 0
-27.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
-28.	Fill in the vector with the smoothing curve for the next audio block to render, starting with the internalValue, and paying attention to the number of remaining samples before reaching the target value
-29.	If there is no change request, then do nothing. Close the scope {} here (although not necessary, it is reassuring), then add the break statement.
+16.	Else if the state is TRANSIENT, test if there is a newChangeRequest through the same method as for the STEADY state: create a new empty ChangeRequest variable
+17.	Then open a new scope {} and lock the changeRequestDeposit with a unique_lock to check if there is any new change request
+18.	Test if there is a new change request through the newChangeRequestReceived boolean
+19.	If there is, copy the change request data in the aforementioned ChangeRequest variable (it is assumed copying a double, a boolean and an unsigned int is fast enough (O(1)) to let us hold the mutex without any consequence, and without requiring to use a pointer swap for efficiency).
+20.	Unlock the unique_lock mutex
+21.	Read the collected data and check if smoothChange is true
+22.	If it is not, then change the parameter’s internal value to its newValue atomically
+23.	If it is, then open a second scope {{}} and lock the transientTracker with a lock_guard lock to write into it
+24.	Copy the durationInSamples of the ChangeRequest variable into the timer
+25.	Set the position to 0
+26.	Close the second scope {{}} (this will unlock and destroy the lock_guard) #CHECK COMPATIBILITY WITH COMPILER’S OPTIMIZATION
+27.	Fill in the vector with the smoothing curve for the next audio block to render, starting with the internalValue, and paying attention to the number of remaining samples before reaching the target value
+28.	If there is no change request, then do nothing. Close the scope {} here (although not necessary, it is reassuring), then add the break statement.
 
 updateParametersAfterRendering()
 
 1.	For all parameters in TRANSIENT state, set the internalValue to the last value in the transientCurve
 // There is an unaddressed data race here, as the end-user could force a parameter into a STEADY state through a non-smooth change before the internalValue is updated, but after the test on the state is done. This would lead the end-user’s request to be ignored, which is ok regarding the probability of this happening.
-2.	Then lock the transientTimer
+2.	Then lock the transientTracker
 3.	Increment the position by numSamples
 4.	If the position ends up being beyond the transientDurationInSamples (which is likely to have already been detected when computing the transientCurve), then change the parameter’s state to STEADY
 
 General notes
 =============
 
-// Note 1: the only way the end-user can change a parameter’s state is through an instant change into a STEADY state (i.e. through a non-smooth change request). Otherwise, the state of the parameter can only be changed within the renderNextAudioBlock class, though methods that are called by the ParameterRenderer or the Instrument itself in a proper ordering.
+// Note 1: the only way the end-user can change a parameter’s state is through an instant change into a STEADY state (i.e. through a non-smooth change request). Otherwise, the state of the parameter can only be changed within the renderNextAudioBlock class, through methods that are called by the ParameterRenderer or the Instrument itself in a proper ordering.
 
 // Note 2: the transientCurve may be the subject of a data race
 
