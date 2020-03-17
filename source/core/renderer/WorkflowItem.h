@@ -33,7 +33,7 @@ namespace ANGLECORE
     struct WorkflowItem
     {
         /** The ID of the workflow item. */
-        uint32_t id;
+        const uint32_t id;
 
         /**
         * The constructor simply defines an ID for the new item, using a static

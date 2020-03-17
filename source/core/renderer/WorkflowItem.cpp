@@ -26,10 +26,9 @@
 
 namespace ANGLECORE
 {
-    WorkflowItem::WorkflowItem()
-    {
-        id = nextId++;
-    }
+    WorkflowItem::WorkflowItem() :
+        id(nextId++)
+    {}
 
     uint32_t WorkflowItem::nextId = 0;
 }

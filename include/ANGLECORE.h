@@ -27,10 +27,21 @@
 namespace ANGLECORE
 {
 
+    /*
+    =================================================
+    Renderer
+    =================================================
+    */
+
+
+    /**
+    * \struct WorkflowItem WorkflowItem.h
+    * Item of a workflow, with a unique ID.
+    */
     struct WorkflowItem
     {
         /** The ID of the workflow item. */
-        uint32_t id;
+        const uint32_t id;
 
         /**
         * The constructor simply defines an ID for the new item, using a static
@@ -51,19 +62,13 @@ namespace ANGLECORE
         static uint32_t nextId;
     };
 
-    /*
-    =================================================
-    Stream
-    =================================================
-    */
-
-
     /**
     * \class Stream Stream.h
     * Owner of a data stream used in the rendering process. The class implements
     * RAII.
     */
-    class Stream : public WorkflowItem
+    class Stream :
+        public WorkflowItem
     {
     public:
 
