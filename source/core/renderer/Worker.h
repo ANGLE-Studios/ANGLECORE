@@ -82,6 +82,12 @@ namespace ANGLECORE
         double* getOutputStream(unsigned short index) const;
 
         /**
+        * Returns a vector containing all the input streams the worker is connected
+        * to. The vector may contain null pointers when no stream is attached.
+        */
+        const std::vector<std::shared_ptr<const Stream>>& getInputBus() const;
+
+        /**
         * Computes the values of every output Stream based on the input streams.
         * This method should be overidden in any sub-class to perform rendering.
         * Note that this method should be really fast, and lock-free. Also note this

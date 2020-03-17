@@ -70,4 +70,9 @@ namespace ANGLECORE
     {
         return m_outputBus[index]->getDataForWriting();
     }
+
+    const std::vector<std::shared_ptr<const Stream>>& Worker::getInputBus() const
+    {
+        return m_inputBus;
+    }
 }
