@@ -22,19 +22,28 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "Worker.h"
 
 namespace ANGLECORE
 {
-    Worker::Worker(unsigned short numInputs, unsigned short numOutputs) : WorkflowItem()
+    Worker::Worker(unsigned short numInputs, unsigned short numOutputs) :
+        WorkflowItem(),
+
+        /*
+        * m_hasInputs can be determined upon construction, which is why it is const.
+        */
+        m_hasInputs(numInputs > 0)
     {
+
         /*
         * We resize the buses and ensure all the pointers are initialized to nullptr
         */
-        for (unsigned short i = 0; i < numInputs; i++)
-            m_inputBus.emplace_back(nullptr);
-        for (unsigned short i = 0; i < numOutputs; i++)
-            m_outputBus.emplace_back(nullptr);
+        m_inputBus.resize(numInputs);
+        std::fill(m_inputBus.begin(), m_inputBus.end(), nullptr);
+        m_outputBus.resize(numOutputs);
+        std::fill(m_outputBus.begin(), m_outputBus.end(), nullptr);
     }
 
     void Worker::connectInput(unsigned short index, std::shared_ptr<const Stream> newInputStream)
@@ -74,5 +83,10 @@ namespace ANGLECORE
     const std::vector<std::shared_ptr<const Stream>>& Worker::getInputBus() const
     {
         return m_inputBus;
+    }
+
+    bool Worker::hasInputs() const
+    {
+        return m_hasInputs;
     }
 }

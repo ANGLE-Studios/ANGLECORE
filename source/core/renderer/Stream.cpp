@@ -26,7 +26,8 @@
 
 namespace ANGLECORE
 {
-    Stream::Stream() : WorkflowItem()
+    Stream::Stream() :
+        WorkflowItem()
     {
         data = new double[ANGLECORE_FIXED_STREAM_SIZE];
     }

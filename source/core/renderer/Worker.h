@@ -35,7 +35,8 @@ namespace ANGLECORE
     * Represents an agent that processes input streams into output streams. This is
     * an abstract class.
     */
-    class Worker : public WorkflowItem
+    class Worker :
+        public WorkflowItem
     {
     public:
 
@@ -88,6 +89,12 @@ namespace ANGLECORE
         const std::vector<std::shared_ptr<const Stream>>& getInputBus() const;
 
         /**
+        * Returns true if the input bus is empty, meaning the Worker is actually a
+        * generator, and false otherwise.
+        */
+        bool hasInputs() const;
+
+        /**
         * Computes the values of every output Stream based on the input streams.
         * This method should be overidden in any sub-class to perform rendering.
         * Note that this method should be really fast, and lock-free. Also note this
@@ -101,5 +108,6 @@ namespace ANGLECORE
     private:
         std::vector<std::shared_ptr<const Stream>> m_inputBus;
         std::vector<std::shared_ptr<Stream>> m_outputBus;
+        const bool m_hasInputs;
     };
 }

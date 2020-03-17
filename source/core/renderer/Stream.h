@@ -31,7 +31,8 @@ namespace ANGLECORE
     * Owner of a data stream used in the rendering process. The class implements
     * RAII.
     */
-    class Stream : public WorkflowItem
+    class Stream :
+        public WorkflowItem
     {
     public:
 
