@@ -32,19 +32,16 @@ namespace ANGLECORE
         WorkflowItem(),
 
         /*
+        * We set the buses'size and initialize all the pointers to nullptr
+        */
+        m_inputBus(numInputs, nullptr),
+        m_outputBus(numOutputs, nullptr),
+
+        /*
         * m_hasInputs can be determined upon construction, which is why it is const.
         */
         m_hasInputs(numInputs > 0)
-    {
-
-        /*
-        * We resize the buses and ensure all the pointers are initialized to nullptr
-        */
-        m_inputBus.resize(numInputs);
-        std::fill(m_inputBus.begin(), m_inputBus.end(), nullptr);
-        m_outputBus.resize(numOutputs);
-        std::fill(m_outputBus.begin(), m_outputBus.end(), nullptr);
-    }
+    {}
 
     void Worker::connectInput(unsigned short index, std::shared_ptr<const Stream> newInputStream)
     {
