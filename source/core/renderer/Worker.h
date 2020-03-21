@@ -49,6 +49,12 @@ namespace ANGLECORE
         */
         Worker(unsigned short numInputs, unsigned short numOutputs);
 
+        /** Returns the number of inputs in the input bus */
+        unsigned short getNumInputs() const;
+
+        /** Returns the number of outputs in the output bus */
+        unsigned short getNumOutputs() const;
+
         /**
         * Connects the Worker's input at \p index to the given Stream. Note that if
         * an input Stream was already connected at the given index in the input bus,
@@ -106,6 +112,8 @@ namespace ANGLECORE
         virtual void work(unsigned int numSamplesToWorkOn) = 0;
 
     private:
+        const unsigned short m_numInputs;
+        const unsigned short m_numOutputs;
         std::vector<std::shared_ptr<const Stream>> m_inputBus;
         std::vector<std::shared_ptr<Stream>> m_outputBus;
         const bool m_hasInputs;

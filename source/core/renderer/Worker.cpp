@@ -30,6 +30,8 @@ namespace ANGLECORE
 {
     Worker::Worker(unsigned short numInputs, unsigned short numOutputs) :
         WorkflowItem(),
+        m_numInputs(numInputs),
+        m_numOutputs(numOutputs),
 
         /*
         * We set the buses'size and initialize all the pointers to nullptr
@@ -42,6 +44,16 @@ namespace ANGLECORE
         */
         m_hasInputs(numInputs > 0)
     {}
+
+    unsigned short Worker::getNumInputs() const
+    {
+        return m_numInputs;
+    }
+
+    unsigned short Worker::getNumOutputs() const
+    {
+        return m_numOutputs;
+    }
 
     void Worker::connectInput(unsigned short index, std::shared_ptr<const Stream> newInputStream)
     {
