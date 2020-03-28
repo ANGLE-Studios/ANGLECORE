@@ -98,6 +98,24 @@ namespace ANGLECORE
         */
         bool plugWorkerIntoStream(uint32_t workerID, unsigned short outputStreamNumber, uint32_t streamID);
 
+    protected:
+
+        /**
+        * This method is a recursive utility function for exploring the Workflow's
+        * tree-like structure. It computes the chain of workers that must be called
+        * before calling a given \p worker, and appends all of the workers
+        * encountered (including the provided \p worker) at the end of a given
+        * sequence. The calculation keeps track of the order with which the workers
+        * should be called for the rendering to be successful, which is why the
+        * result is called a "Rendering Sequence".
+        * @param[in] worker The worker to start the computation from. The function
+        *   will actually compute which Worker should be called and in which order
+        *   to render every input of \p worker.
+        * @param[out] currentRenderingSequence The output sequence of the
+        *   computation, which is recursively filled up.
+        */
+        void completeRenderingSequenceForWorker(const std::shared_ptr<const Worker>& worker, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
+
     private:
 
         /**
@@ -115,6 +133,6 @@ namespace ANGLECORE
         std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_workers;
 
         /** Maps a Stream ID to its input worker */
-        std::unordered_map<uint32_t, std::shared_ptr<const Worker>> m_map;
+        std::unordered_map<uint32_t, std::shared_ptr<const Worker>> m_inputWorkers;
     };
 }

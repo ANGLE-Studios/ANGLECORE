@@ -143,7 +143,7 @@ namespace ANGLECORE
                     * reliable rendering sequence, and prevent the worker from using
                     * uninitialized memory.
                     */
-                    m_map[stream->id] = worker;
+                    m_inputWorkers[stream->id] = worker;
                     worker->connectOutput(outputStreamNumber, stream);
 
                     /* The connection is successfull, so we return true */
@@ -158,5 +158,84 @@ namespace ANGLECORE
         * false.
         */
         return false;
+    }
+
+    void Workflow::completeRenderingSequenceForWorker(const std::shared_ptr<const Worker>& worker, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const
+    {
+        /*
+        * If worker is a nullptr, we have nothing to start the computation from, so
+        * we simply return here.
+        */
+        if (!worker)
+            return;
+
+        for (auto stream : worker->getInputBus())
+        {
+            /*
+            * The worker could have some unplugged input, so we test if
+            * streamPointer is null first.
+            */
+            if (stream)
+            {
+                /*
+                * We retrieve the current stream's input worker, which is the worker
+                * who is responsible for filling it up. We stored that information
+                * in the m_map attribute, so we simply need to look it up.
+                */
+                auto inputWorkerIterator = m_inputWorkers.find(stream->id);
+                if (inputWorkerIterator != m_inputWorkers.end())
+                {
+                    const std::shared_ptr<const Worker> inputWorker = inputWorkerIterator->second;
+
+                    /*
+                    * Note that once here, since we found the worker in the map, it
+                    * is guaranteed inputWorker is not a null pointer, as we only
+                    * insert non-null shared pointers into the workflow's maps.
+                    */
+
+                    /*
+                    * We recursively call the current function on the worker we just
+                    * found, in order to retrieve all of the workers that need to be
+                    * called before it. We will add inputWorker at the end of this
+                    * sequence.
+                    */
+                    completeRenderingSequenceForWorker(inputWorker, currentRenderingSequence);
+
+                    /*
+                    * Finally, we add inputWorker at the end of the current sequence,
+                    * but only if it is not already part of the sequence.
+                    */
+                    bool inputWorkerAlreadyInSequence = false;
+                    for (auto it = currentRenderingSequence.cbegin(); it != currentRenderingSequence.cend() && !inputWorkerAlreadyInSequence; it++)
+                    {
+                        /*
+                        * We use the worker's ID to detect whether it is already in
+                        * the sequence.
+                        */
+                        if ((*it)->id == inputWorker->id)
+                            inputWorkerAlreadyInSequence = true;
+                    }
+                    if (!inputWorkerAlreadyInSequence)
+                        currentRenderingSequence.emplace_back(inputWorker);
+                }
+            }
+        }
+
+
+        /*
+        * Finally, we add the worker to the rendering sequence if it was not already
+        * there.
+        */
+        bool alreadyInSequence = false;
+        for (auto it = currentRenderingSequence.cbegin(); it != currentRenderingSequence.cend() && !alreadyInSequence; it++)
+        {
+            /*
+            * We use the worker's ID to detect whether it is already in the sequence
+            */
+            if ((*it)->id == worker->id)
+                alreadyInSequence = true;
+        }
+        if (!alreadyInSequence)
+            currentRenderingSequence.emplace_back(worker);
     }
 }
