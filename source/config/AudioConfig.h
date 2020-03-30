@@ -23,6 +23,15 @@
 #pragma once
 
 /**********************************************************************
+** AUDIO WORKFLOW
+**********************************************************************/
+
+#define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_CHANNELS 2
+#define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES 32
+#define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE 10
+#define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
+
+/**********************************************************************
 ** INSTRUMENT
 **********************************************************************/
 

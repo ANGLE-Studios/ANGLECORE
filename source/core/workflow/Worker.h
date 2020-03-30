@@ -109,7 +109,7 @@ namespace ANGLECORE
         * @param[in] numSamplesToWorkOn number of samples to generate or process.
         *   This should always be less than or equal to the renderer's buffer size.
         */
-        virtual void work(unsigned int numSamplesToWorkOn) = 0;
+        virtual void work(unsigned int numChannelsToWorkOn, unsigned int numSamplesToWorkOn) = 0;
 
     private:
         const unsigned short m_numInputs;
