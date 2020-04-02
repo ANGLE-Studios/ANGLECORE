@@ -32,8 +32,8 @@ namespace ANGLECORE
 {
     /**
     * \class Workflow Workflow.h
-    * Represents a set of instructions to generate an audio output. It consists of a
-    * succession of workers and streams, and it should not contain any feedback.
+    * Represents a set of instructions as a succession of workers and streams. A
+    * Workflow should not contain any feedback.
     */
     class Workflow
     {
