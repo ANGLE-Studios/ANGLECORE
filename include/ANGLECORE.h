@@ -181,7 +181,7 @@ namespace ANGLECORE
         * @param[in] numSamplesToWorkOn number of samples to generate or process.
         *   This should always be less than or equal to the renderer's buffer size.
         */
-        virtual void work(unsigned int numChannelsToWorkOn, unsigned int numSamplesToWorkOn) = 0;
+        virtual void work(unsigned int numSamplesToWorkOn) = 0;
 
     private:
         const unsigned short m_numInputs;
@@ -298,7 +298,7 @@ namespace ANGLECORE
         std::unordered_map<uint32_t, std::shared_ptr<const Worker>> m_inputWorkers;
     };
 
-    #define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_CHANNELS 2
+    #define ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS 2
     #define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES 32
     #define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE 10
     #define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
@@ -308,7 +308,7 @@ namespace ANGLECORE
     * Worker that exports data from its input streams into an output buffer sent to
     * the host. An exporter applies a gain for calibrating its output level.
     */
-    template<typename T>
+    template<typename OutputType>
     class Exporter :
         public Worker
     {
@@ -318,33 +318,63 @@ namespace ANGLECORE
         * Creates a Worker with zero output.
         */
         Exporter() :
-            Worker(ANGLECORE_AUDIOWORKFLOW_MAX_NUM_CHANNELS, 0),
-            m_outputBuffer(nullptr)
+            Worker(ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS, 0),
+            m_outputBuffer(nullptr),
+            m_numOutputChannels(0)
         {}
 
         /**
         * Sets the new memory location to write into when exporting.
         * @param[in] buffer The new memory location.
+        * @param[in] numChannels Number of output channels.
         */
-        void setOutputBuffer(T** buffer)
+        void setOutputBuffer(OutputType** buffer, unsigned short int numChannels)
         {
             m_outputBuffer = buffer;
+            m_numOutputChannels = numChannels;
         }
 
-        void work(unsigned int numChannelsToWorkOn, unsigned int numSamplesToWorkOn)
+        void work(unsigned int numSamplesToWorkOn)
         {
             /*
-            * It is assumed that both numChannelsToWorkOn and numSamplesToWorkOn are
-            * in-range, i.e. less than or equal to the maximal number of channels
-            * and the stream buffer size respectively. It is also assumed the output
-            * buffer has been properly set to a valid memory location.
+            * It is assumed that both m_numOutputChannels and numSamplesToWorkOn are
+            * in-range, i.e. less than or equal to the output buffer's number of
+            * channels and the stream and buffer size respectively. It is also
+            * assumed the output buffer has been properly set to a valid memory
+            * location.
             */
-            for (unsigned int c = 0; c < numChannelsToWorkOn; c++)
-                for (unsigned int i = 0; i < numSamplesToWorkOn; i++)
-                    m_outputBuffer[c][i] = static_cast<T>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+
+            /*
+            * If the host request less channels than rendered, we sum their content
+            * using a modulo approach.
+            */
+            if (m_numOutputChannels < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)
+            {
+                /* We first clear the output buffer */
+                for (unsigned short int c = 0; c < m_numOutputChannels; c++)
+                    for (unsigned int i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c][i] = 0.0;
+
+                /* And then we compute the sum into the output buffer */
+                for (unsigned short int c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+                    for (unsigned int i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+            }
+
+            /*
+            * Otherwise, if we have not rendered enough channels for the host, we
+            * simply duplicate data.
+            */
+            else
+            {
+                for (unsigned int c = 0; c < m_numOutputChannels; c++)
+                    for (unsigned int i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c][i] = static_cast<OutputType>(getInputStream(c % ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+            }
         }
 
     private:
-        T** m_outputBuffer;
+        OutputType** m_outputBuffer;
+        unsigned short int m_numOutputChannels;
     };
 }
