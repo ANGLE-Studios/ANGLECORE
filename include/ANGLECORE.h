@@ -309,7 +309,7 @@ namespace ANGLECORE
     class AudioWorkflow :
         public Workflow
     {
-    protected:
+    public:
 
         /**
         * \class Exporter Exporter.h
@@ -402,7 +402,6 @@ namespace ANGLECORE
             const unsigned short m_totalNumInstruments;
         };
 
-    public:
         AudioWorkflow();
     };
 }
