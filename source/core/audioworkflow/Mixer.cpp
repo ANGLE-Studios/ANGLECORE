@@ -38,26 +38,29 @@ namespace ANGLECORE
         {
             double* output = getOutputStream(c);
 
-            /* We check if an output stream is plugged in */
-            if (output)
+            /*
+            * The output bus is assumed to be already connected to existing
+            * streams (towards the Exporter), so we do not need to check if 'output'
+            * equals nullptr. We assume it is not. However, we will still need to
+            * test for the input streams.
+            */
+
+            /* We first clear the output buffer: */
+            for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
+                output[s] = 0.0;
+
+            /* 
+            * And then we sum each input channel into its corresponding output
+            * channel.
+            */
+            for (unsigned short i = 0; i < m_totalNumInstruments; i++)
             {
-                /* We first clear the output buffer: */
-                for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
-                    output[s] = 0.0;
+                const double* input = getInputStream(i * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS + c);
 
-                /* 
-                * And then we sum each input channel into its corresponding output
-                * channel.
-                */
-                for (unsigned short i = 0; i < m_totalNumInstruments; i++)
-                {
-                    const double* input = getInputStream(i * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS + c);
-
-                    /* We check if an input stream is plugged in before summing */
-                    if (input)
-                        for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
-                            output[s] += input[s];
-                }
+                /* We check if an input stream is plugged in before summing */
+                if (input)
+                    for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
+                        output[s] += input[s];
             }
         }
     }
