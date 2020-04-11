@@ -238,4 +238,25 @@ namespace ANGLECORE
         if (!alreadyInSequence)
             currentRenderingSequence.emplace_back(worker);
     }
+
+    void Workflow::completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const
+    {
+        /*
+        * If stream is a nullptr, we have nothing to start the computation from, so
+        * we simply return here.
+        */
+        if (!stream)
+            return;
+
+        auto inputWorkerIterator = m_inputWorkers.find(stream->id);
+        if (inputWorkerIterator != m_inputWorkers.end())
+        {
+            /*
+            * Note that once here, since we found the worker in the map, it is
+            * guaranteed inputWorker is not a null pointer, as we only insert non-
+            * null shared pointers into the workflow's maps.
+            */
+            completeRenderingSequenceForWorker(inputWorkerIterator->second, currentRenderingSequence);
+        }
+    }
 }

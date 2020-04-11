@@ -278,6 +278,18 @@ namespace ANGLECORE
         */
         void completeRenderingSequenceForWorker(const std::shared_ptr<const Worker>& worker, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
 
+        /**
+        * Computes the chain of workers that must be called to fill up a given
+        * \p stream. This method simply retrieve the Stream's input Worker, and call
+        * completeRenderingSequenceForWorker() with that worker.
+        * @param[in] stream The Stream to start the computation from. The function
+        *   will actually compute which Worker should be called and in which order
+        *   to render \p stream.
+        * @param[out] currentRenderingSequence The output sequence of the
+        *   computation, which is recursively filled up.
+        */
+        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
+
     private:
 
         /**
