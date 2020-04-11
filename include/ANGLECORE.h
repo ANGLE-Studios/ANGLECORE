@@ -204,7 +204,7 @@ namespace ANGLECORE
         * Adds the given Stream into the Workflow, and updates the workflow's
         * internal ID-Stream map accordingly. Note that streams are never created by
         * the Workflow itself, but rather passed as arguments after being created by
-        * a dedicated entity: the WorkflowDesigner.
+        * a dedicated entity.
         * @param[in] streamToAdd The Stream to add into the Workflow.
         */
         void addStream(const std::shared_ptr<Stream>& streamToAdd);
@@ -213,7 +213,7 @@ namespace ANGLECORE
         * Adds the given Worker into the Workflow, and updates the workflow's
         * internal ID-Worker map accordingly. Note that workers are never created by
         * the Workflow itself, but rather passed as arguments after being created by
-        * a dedicated entity: the WorkflowDesigner.
+        * a dedicated entity.
         * @param[in] workerToAdd The Worker to add into the Workflow.
         */
         void addWorker(const std::shared_ptr<Worker>& workerToAdd);
@@ -308,6 +308,33 @@ namespace ANGLECORE
 
         /** Maps a Stream ID to its input worker */
         std::unordered_map<uint32_t, std::shared_ptr<const Worker>> m_inputWorkers;
+    };
+
+    /**
+    * \class Builder Builder.h
+    * Abstract class representing an object that is able to build worfklow items.
+    */
+    class Builder
+    {
+        /**
+        * \struct Island Builder.h
+        * Isolated part of a workflow, which is not connected to the real-time
+        * rendering pipeline yet, but will be connected to the whole workflow by the
+        * real-time thread.
+        */
+        struct Island
+        {
+            std::vector<std::shared_ptr<Stream>> streams;
+            std::vector<std::shared_ptr<Worker>> workers;
+        };
+
+        /* We rely on the default constructor */
+
+        /**
+        * Builds and returns an Island for a Workflow to integrate. This method
+        * should be overriden in each sub-class to construct the appropriate Island.
+        */
+        virtual std::shared_ptr<Island> build() = 0;
     };
 
     #define ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS 2

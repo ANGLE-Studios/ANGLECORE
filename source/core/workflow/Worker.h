@@ -102,7 +102,7 @@ namespace ANGLECORE
 
         /**
         * Computes the values of every output Stream based on the input streams.
-        * This method should be overidden in any sub-class to perform rendering.
+        * This method should be overriden in each sub-class to perform rendering.
         * Note that this method should be really fast, and lock-free. Also note this
         * is the only method of this class that can be called by the real-time
         * thread.

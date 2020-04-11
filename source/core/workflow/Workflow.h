@@ -43,7 +43,7 @@ namespace ANGLECORE
         * Adds the given Stream into the Workflow, and updates the workflow's
         * internal ID-Stream map accordingly. Note that streams are never created by
         * the Workflow itself, but rather passed as arguments after being created by
-        * a dedicated entity: the WorkflowDesigner.
+        * a dedicated entity.
         * @param[in] streamToAdd The Stream to add into the Workflow.
         */
         void addStream(const std::shared_ptr<Stream>& streamToAdd);
@@ -52,7 +52,7 @@ namespace ANGLECORE
         * Adds the given Worker into the Workflow, and updates the workflow's
         * internal ID-Worker map accordingly. Note that workers are never created by
         * the Workflow itself, but rather passed as arguments after being created by
-        * a dedicated entity: the WorkflowDesigner.
+        * a dedicated entity.
         * @param[in] workerToAdd The Worker to add into the Workflow.
         */
         void addWorker(const std::shared_ptr<Worker>& workerToAdd);
