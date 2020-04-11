@@ -20,30 +20,11 @@
 **
 **********************************************************************/
 
-#include "Stream.h"
-
-#include "../../config/RenderingConfig.h"
+#include "AudioWorkflow.h"
 
 namespace ANGLECORE
 {
-    Stream::Stream() :
-        WorkflowItem()
-    {
-        data = new double[ANGLECORE_FIXED_STREAM_SIZE];
-    }
-
-    Stream::~Stream()
-    {
-        delete[] data;
-    }
-
-    const double* const Stream::getDataForReading() const
-    {
-        return data;
-    }
-
-    double* const Stream::getDataForWriting()
-    {
-        return data;
-    }
+    AudioWorkflow::AudioWorkflow() :
+        Workflow()
+    {}
 }

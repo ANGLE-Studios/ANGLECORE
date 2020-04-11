@@ -20,21 +20,18 @@
 **
 **********************************************************************/
 
-#include "AudioWorkflow.h"
+#include "Mixer.h"
 
 #include "../../config/AudioConfig.h"
 
 namespace ANGLECORE
 {
-    /*  Mixer
-    ************************************/
-
-    AudioWorkflow::Mixer::Mixer() :
+    Mixer::Mixer() :
         Worker(ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES * ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS, ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS),
         m_totalNumInstruments(ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES * ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE)
     {}
 
-    void AudioWorkflow::Mixer::work(unsigned int numSamplesToWorkOn)
+    void Mixer::work(unsigned int numSamplesToWorkOn)
     {
 
         for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
@@ -44,7 +41,7 @@ namespace ANGLECORE
             // WE CLEAR
             for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
                 output[s] = 0.0;
-            
+
             // WE SUM
             for (unsigned short i = 0; i < m_totalNumInstruments; i++)
             {
@@ -54,11 +51,4 @@ namespace ANGLECORE
             }
         }
     }
-
-    /*  AudioWorkflow
-    ************************************/
-
-    AudioWorkflow::AudioWorkflow() :
-        Workflow()
-    {}
 }

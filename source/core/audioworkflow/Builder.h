@@ -25,8 +25,8 @@
 #include <memory>
 #include <vector>
 
-#include "Stream.h"
-#include "Worker.h"
+#include "workflow/Stream.h"
+#include "workflow/Worker.h"
 
 namespace ANGLECORE
 {
