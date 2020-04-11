@@ -120,7 +120,16 @@ namespace ANGLECORE
             public Worker
         {
         public:
+
+            /**
+            * Initializes the Worker's buses size according to the audio
+            * configuration (number of channels, number of instruments...)
+            */
             Mixer();
+
+            /**
+            * Mixes all the channels together
+            */
             void work(unsigned int numSamplesToWorkOn);
 
         private:

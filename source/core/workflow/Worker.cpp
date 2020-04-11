@@ -81,11 +81,21 @@ namespace ANGLECORE
 
     const double* const Worker::getInputStream(unsigned short index) const
     {
+        /* If no input stream is connected, we return a null pointer */
+        if (!m_inputBus[index])
+            return nullptr;
+
+        /* Otherwise, we retrieve and return the stream's internal data */
         return m_inputBus[index]->getDataForReading();
     }
 
     double* Worker::getOutputStream(unsigned short index) const
     {
+        /* If no output stream is connected, we return a null pointer */
+        if (!m_outputBus[index])
+            return nullptr;
+
+        /* Otherwise, we retrieve and return the stream's internal data */
         return m_outputBus[index]->getDataForWriting();
     }
 
