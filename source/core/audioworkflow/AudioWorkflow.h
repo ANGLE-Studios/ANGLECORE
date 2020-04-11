@@ -35,11 +35,6 @@ namespace ANGLECORE
         public Workflow
     {
     public:
-
-        
-
-        
-
         AudioWorkflow();
     };
 }

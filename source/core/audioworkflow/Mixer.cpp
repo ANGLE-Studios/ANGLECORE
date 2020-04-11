@@ -38,16 +38,26 @@ namespace ANGLECORE
         {
             double* output = getOutputStream(c);
 
-            // WE CLEAR
-            for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
-                output[s] = 0.0;
-
-            // WE SUM
-            for (unsigned short i = 0; i < m_totalNumInstruments; i++)
+            /* We check if an output stream is plugged in */
+            if (output)
             {
-                const double* input = getInputStream(i * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS + c);
+                /* We first clear the output buffer: */
                 for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
-                    output[s] += input[s];
+                    output[s] = 0.0;
+
+                /* 
+                * And then we sum each input channel into its corresponding output
+                * channel.
+                */
+                for (unsigned short i = 0; i < m_totalNumInstruments; i++)
+                {
+                    const double* input = getInputStream(i * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS + c);
+
+                    /* We check if an input stream is plugged in before summing */
+                    if (input)
+                        for (unsigned int s = 0; s < numSamplesToWorkOn; s++)
+                            output[s] += input[s];
+                }
             }
         }
     }
