@@ -346,7 +346,7 @@ namespace ANGLECORE
         * @param[in] buffer The new memory location.
         * @param[in] numChannels Number of output channels.
         */
-        void setOutputBuffer(OutputType** buffer, unsigned short int numChannels, uint32_t startSample)
+        void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
         {
             m_outputBuffer = buffer;
             m_numOutputChannels = numChannels;
@@ -370,12 +370,12 @@ namespace ANGLECORE
             if (m_numOutputChannels < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)
             {
                 /* We first clear the output buffer */
-                for (unsigned short int c = 0; c < m_numOutputChannels; c++)
+                for (unsigned short c = 0; c < m_numOutputChannels; c++)
                     for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
                         m_outputBuffer[c][i] = 0.0;
 
                 /* And then we compute the sum into the output buffer */
-                for (unsigned short int c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+                for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
                     for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
                         m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
             }
@@ -394,7 +394,7 @@ namespace ANGLECORE
 
     private:
         OutputType** m_outputBuffer;
-        unsigned short int m_numOutputChannels;
+        unsigned short m_numOutputChannels;
         uint32_t m_startSample;
     };
 
@@ -430,8 +430,8 @@ namespace ANGLECORE
     class Builder
     {
         /**
-        * \struct Island Builder.h
-        * Isolated part of a workflow, which is not connected to the real-time
+        * \struct WorkflowIsland Builder.h
+        * Isolated subset of a workflow, which is not connected to the real-time
         * rendering pipeline yet, but will be connected to the whole workflow by the
         * real-time thread.
         */
@@ -442,10 +442,11 @@ namespace ANGLECORE
         };
 
         /* We rely on the default constructor */
-
+        
         /**
-        * Builds and returns an Island for a Workflow to integrate. This method
-        * should be overriden in each sub-class to construct the appropriate Island.
+        * Builds and returns a WorkflowIsland for a Workflow to integrate. This
+        * method should be overriden in each sub-class to construct the appropriate
+        * WorkflowIsland.
         */
         virtual std::shared_ptr<WorkflowIsland> build() = 0;
     };

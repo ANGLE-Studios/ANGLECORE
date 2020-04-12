@@ -53,7 +53,7 @@ namespace ANGLECORE
         * @param[in] buffer The new memory location.
         * @param[in] numChannels Number of output channels.
         */
-        void setOutputBuffer(OutputType** buffer, unsigned short int numChannels, uint32_t startSample)
+        void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
         {
             m_outputBuffer = buffer;
             m_numOutputChannels = numChannels;
@@ -77,12 +77,12 @@ namespace ANGLECORE
             if (m_numOutputChannels < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)
             {
                 /* We first clear the output buffer */
-                for (unsigned short int c = 0; c < m_numOutputChannels; c++)
+                for (unsigned short c = 0; c < m_numOutputChannels; c++)
                     for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
                         m_outputBuffer[c][i] = 0.0;
 
                 /* And then we compute the sum into the output buffer */
-                for (unsigned short int c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+                for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
                     for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
                         m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
             }
@@ -101,7 +101,7 @@ namespace ANGLECORE
 
     private:
         OutputType** m_outputBuffer;
-        unsigned short int m_numOutputChannels;
+        unsigned short m_numOutputChannels;
         uint32_t m_startSample;
     };
 }
