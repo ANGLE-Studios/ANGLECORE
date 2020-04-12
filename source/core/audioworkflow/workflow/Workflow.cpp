@@ -160,7 +160,7 @@ namespace ANGLECORE
         return false;
     }
 
-    void Workflow::completeRenderingSequenceForWorker(const std::shared_ptr<const Worker>& worker, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const
+    void Workflow::completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const
     {
         /*
         * If worker is a nullptr, we have nothing to start the computation from, so
@@ -185,7 +185,7 @@ namespace ANGLECORE
                 auto inputWorkerIterator = m_inputWorkers.find(stream->id);
                 if (inputWorkerIterator != m_inputWorkers.end())
                 {
-                    const std::shared_ptr<const Worker> inputWorker = inputWorkerIterator->second;
+                    std::shared_ptr<Worker> inputWorker = inputWorkerIterator->second;
 
                     /*
                     * Note that once here, since we found the worker in the map, it
@@ -239,7 +239,7 @@ namespace ANGLECORE
             currentRenderingSequence.emplace_back(worker);
     }
 
-    void Workflow::completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const
+    void Workflow::completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const
     {
         /*
         * If stream is a nullptr, we have nothing to start the computation from, so

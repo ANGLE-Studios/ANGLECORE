@@ -37,12 +37,12 @@ namespace ANGLECORE
     class Builder
     {
         /**
-        * \struct Island Builder.h
-        * Isolated part of a workflow, which is not connected to the real-time
+        * \struct WorkflowIsland Builder.h
+        * Isolated subset of a workflow, which is not connected to the real-time
         * rendering pipeline yet, but will be connected to the whole workflow by the
         * real-time thread.
         */
-        struct Island
+        struct WorkflowIsland
         {
             std::vector<std::shared_ptr<Stream>> streams;
             std::vector<std::shared_ptr<Worker>> workers;
@@ -51,9 +51,10 @@ namespace ANGLECORE
         /* We rely on the default constructor */
         
         /**
-        * Builds and returns an Island for a Workflow to integrate. This method
-        * should be overriden in each sub-class to construct the appropriate Island.
+        * Builds and returns a WorkflowIsland for a Workflow to integrate. This
+        * method should be overriden in each sub-class to construct the appropriate
+        * WorkflowIsland.
         */
-        virtual std::shared_ptr<Island> build() = 0;
+        virtual std::shared_ptr<WorkflowIsland> build() = 0;
     };
 }

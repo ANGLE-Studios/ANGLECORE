@@ -193,8 +193,8 @@ namespace ANGLECORE
 
     /**
     * \class Workflow Workflow.h
-    * Represents a set of instructions to generate an audio output. It consists of a
-    * succession of workers and streams, and it should not contain any feedback.
+    * Represents a set of instructions as a succession of workers and streams. A
+    * Workflow should not contain any feedback.
     */
     class Workflow
     {
@@ -276,7 +276,7 @@ namespace ANGLECORE
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForWorker(const std::shared_ptr<const Worker>& worker, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
         /**
         * Computes the chain of workers that must be called to fill up a given
@@ -288,7 +288,7 @@ namespace ANGLECORE
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
     private:
 
@@ -307,7 +307,7 @@ namespace ANGLECORE
         std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_workers;
 
         /** Maps a Stream ID to its input worker */
-        std::unordered_map<uint32_t, std::shared_ptr<const Worker>> m_inputWorkers;
+        std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_inputWorkers;
     };
 
 
@@ -435,7 +435,7 @@ namespace ANGLECORE
         * rendering pipeline yet, but will be connected to the whole workflow by the
         * real-time thread.
         */
-        struct Island
+        struct WorkflowIsland
         {
             std::vector<std::shared_ptr<Stream>> streams;
             std::vector<std::shared_ptr<Worker>> workers;
@@ -447,7 +447,7 @@ namespace ANGLECORE
         * Builds and returns an Island for a Workflow to integrate. This method
         * should be overriden in each sub-class to construct the appropriate Island.
         */
-        virtual std::shared_ptr<Island> build() = 0;
+        virtual std::shared_ptr<WorkflowIsland> build() = 0;
     };
 
     /**
@@ -459,6 +459,19 @@ namespace ANGLECORE
         public Workflow
     {
     public:
+        /** Builds the base structure of the AudioWorkflow (Exporter, Mixer...) */
         AudioWorkflow();
+
+        /**
+        * Builds and returns the Workflow's rendering sequence, starting from its
+        * Exporter. This method allocates memory, so it should never be called by
+        * the real-time thread. Note that the method relies on the move semantics to
+        * optimize its vector return.
+        */
+        std::vector<std::shared_ptr<Worker>> buildRenderingSequence() const;
+
+    private:
+        std::shared_ptr<Exporter<float>> m_exporter;
+        std::shared_ptr<Mixer> m_mixer;
     };
 }

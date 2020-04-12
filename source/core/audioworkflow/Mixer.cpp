@@ -42,7 +42,8 @@ namespace ANGLECORE
             * The output bus is assumed to be already connected to existing
             * streams (towards the Exporter), so we do not need to check if 'output'
             * equals nullptr. We assume it is not. However, we will still need to
-            * test for the input streams.
+            * test the input streams against nullptr, as the number of connected
+            * input streams depends on the number of active instruments at runtime.
             */
 
             /* We first clear the output buffer: */

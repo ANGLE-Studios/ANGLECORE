@@ -22,7 +22,9 @@
 
 #pragma once
 
-#include "workflow\Workflow.h"
+#include "workflow/Worker.h"
+
+#include "../../config/AudioConfig.h"
 
 namespace ANGLECORE
 {

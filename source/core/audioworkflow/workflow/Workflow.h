@@ -115,7 +115,7 @@ namespace ANGLECORE
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForWorker(const std::shared_ptr<const Worker>& worker, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
         /**
         * Computes the chain of workers that must be called to fill up a given
@@ -127,7 +127,7 @@ namespace ANGLECORE
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<const Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
     private:
 
@@ -146,6 +146,6 @@ namespace ANGLECORE
         std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_workers;
 
         /** Maps a Stream ID to its input worker */
-        std::unordered_map<uint32_t, std::shared_ptr<const Worker>> m_inputWorkers;
+        std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_inputWorkers;
     };
 }

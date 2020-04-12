@@ -24,6 +24,11 @@
 
 #include "workflow/Workflow.h"
 
+#include <memory>
+
+#include "Exporter.h"
+#include "Mixer.h"
+
 namespace ANGLECORE
 {
     /**
@@ -35,6 +40,19 @@ namespace ANGLECORE
         public Workflow
     {
     public:
+        /** Builds the base structure of the AudioWorkflow (Exporter, Mixer...) */
         AudioWorkflow();
+
+        /**
+        * Builds and returns the Workflow's rendering sequence, starting from its
+        * Exporter. This method allocates memory, so it should never be called by
+        * the real-time thread. Note that the method relies on the move semantics to
+        * optimize its vector return.
+        */
+        std::vector<std::shared_ptr<Worker>> buildRenderingSequence() const;
+
+    private:
+        std::shared_ptr<Exporter<float>> m_exporter;
+        std::shared_ptr<Mixer> m_mixer;
     };
 }

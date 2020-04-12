@@ -22,9 +22,33 @@
 
 #include "AudioWorkflow.h"
 
+#include "../../config/AudioConfig.h"
+
 namespace ANGLECORE
 {
     AudioWorkflow::AudioWorkflow() :
-        Workflow()
-    {}
+        Workflow(),
+        m_exporter(std::make_shared<Exporter<float>>()),
+        m_mixer(std::make_shared<Mixer>())
+    {
+        addWorker(m_exporter);
+        addWorker(m_mixer);
+
+        /* We connect the mixer into the exporter */
+        for (unsigned short int c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+        {
+            std::shared_ptr<Stream> exporterInputStream = std::make_shared<Stream>();
+            addStream(exporterInputStream);
+
+            plugStreamIntoWorker(exporterInputStream->id, m_exporter->id, c);
+            plugWorkerIntoStream(m_mixer->id, c, exporterInputStream->id);
+        }
+    }
+
+    std::vector<std::shared_ptr<Worker>> AudioWorkflow::buildRenderingSequence() const
+    {
+        std::vector<std::shared_ptr<Worker>> renderingSequence;
+        completeRenderingSequenceForWorker(m_exporter, renderingSequence);
+        return renderingSequence;
+    }
 }
