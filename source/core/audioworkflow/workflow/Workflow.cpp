@@ -48,7 +48,7 @@ namespace ANGLECORE
             m_workers[workerToAdd->id] = workerToAdd;
     }
 
-    bool Workflow::plugStreamIntoWorker(uint32_t streamID, uint32_t workerID, unsigned short inputStreamNumber)
+    bool Workflow::plugStreamIntoWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber)
     {
         /*
         * We look for the given stream in the workflow's stream map. If we find the
@@ -78,12 +78,12 @@ namespace ANGLECORE
                 */
 
                 /*
-                * We test inputStreamNumber against the size of the worker's input
+                * We test inputPortNumber against the size of the worker's input
                 * bus:
                 */
-                if (inputStreamNumber < worker->getNumInputs())
+                if (inputPortNumber < worker->getNumInputs())
                 {
-                    worker->connectInput(inputStreamNumber, stream);
+                    worker->connectInput(inputPortNumber, stream);
 
                     /* The connection is successfull, so we return true */
                     return true;
@@ -99,7 +99,7 @@ namespace ANGLECORE
         return false;
     }
 
-    bool Workflow::plugWorkerIntoStream(uint32_t workerID, unsigned short outputStreamNumber, uint32_t streamID)
+    bool Workflow::plugWorkerIntoStream(uint32_t workerID, unsigned short outputPortNumber, uint32_t streamID)
     {
         /*
         * We look for the given worker in the workflow's worker map. If we find the
@@ -129,10 +129,10 @@ namespace ANGLECORE
                 */
 
                 /*
-                * We test inputStreamNumber against the size of the worker's input
+                * We test outputPortNumber against the size of the worker's output
                 * bus:
                 */
-                if (outputStreamNumber < worker->getNumOutputs())
+                if (outputPortNumber < worker->getNumOutputs())
                 {
                     /*
                     * We connect the stream to the worker, and register that new
@@ -144,7 +144,7 @@ namespace ANGLECORE
                     * uninitialized memory.
                     */
                     m_inputWorkers[stream->id] = worker;
-                    worker->connectOutput(outputStreamNumber, stream);
+                    worker->connectOutput(outputPortNumber, stream);
 
                     /* The connection is successfull, so we return true */
                     return true;
@@ -158,6 +158,151 @@ namespace ANGLECORE
         * false.
         */
         return false;
+    }
+
+    bool Workflow::unplugStreamFromWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber)
+    {
+        /*
+        * WE STILL NEED TO CHECK IF THE STREAM EXISTS:
+        * If the Stream is unregistered from the Workflow while still being
+        * referenced by the Worker, the ID comparison will succeed and the Worker
+        * will delete its input, possibly causing memory deallocation
+        */
+
+        /*
+        * We look for the given stream in the workflow's stream map. If we find the
+        * stream, it automatically implies its corresponding pointer is not null, as
+        * we only insert non-null shared pointers into the maps.
+        */
+        auto streamIterator = m_streams.find(streamID);
+        if (streamIterator != m_streams.end())
+        {
+            /*
+            * Similarly, we look for the given worker in the workflow's worker map.
+            * If we find the worker, it also implies its corresponding pointer is
+            * not null, as we only insert non-null shared pointers into the maps.
+            */
+            auto workerIterator = m_workers.find(workerID);
+            if (workerIterator != m_workers.end())
+            {
+                /* We found the worker, so we retrieve it */
+                std::shared_ptr<Worker> worker = workerIterator->second;
+
+                const std::vector<std::shared_ptr<const Stream>>& inputBus = worker->getInputBus();
+
+                /*
+                * We test inputPortNumber against the size of the worker's input
+                * bus, and we compare the encountered stream's ID in a row:
+                */
+                if (inputPortNumber < worker->getNumInputs() && inputBus[inputPortNumber] && inputBus[inputPortNumber]->id == streamID)
+                {
+                    // NO MEMORY DEALLOCATION
+                    worker->disconnectInput(inputPortNumber);
+
+                    /* The disconnection is successfull, so we return true */
+                    return true;
+                }
+            }
+        }
+
+        /*
+        * If we arrive here, this means one of the previous three tests failed,
+        * which prevents us from making the disconnection. We therefore stop and
+        * return false.
+        */
+        return false;
+    }
+
+    bool Workflow::unplugWorkerFromStream(uint32_t workerID, unsigned short outputPortNumber, uint32_t streamID)
+    {
+        /*
+        * WE STILL NEED TO CHECK IF THE STREAM EXISTS:
+        * If the Stream is unregistered from the Workflow while still being
+        * referenced by the Worker, the ID comparison will succeed and the Worker
+        * will delete its input, possibly causing memory deallocation
+        */
+
+        /*
+        * We look for the given worker in the workflow's worker map. If we find the
+        * worker, it automatically implies its corresponding pointer is not null, as
+        * we only insert non-null shared pointers into the maps.
+        */
+        auto workerIterator = m_workers.find(workerID);
+        if (workerIterator != m_workers.end())
+        {
+            /* We found the worker, so we retrieve it */
+            std::shared_ptr<Worker> worker = workerIterator->second;
+
+            const std::vector<std::shared_ptr<Stream>>& outputBus = worker->getOutputBus();
+
+            /*
+            * Similarly, we look for the given stream in the workflow's stream map.
+            * If we find the stream, it also implies its corresponding pointer is
+            * not null, as we only insert non-null shared pointers into the maps.
+            */
+            auto streamIterator = m_streams.find(streamID);
+            if (streamIterator != m_streams.end())
+            {
+                /*
+                * We test outputPortNumber against the size of the worker's output
+                * bus:
+                */
+                if (outputPortNumber < worker->getNumOutputs() && outputBus[outputPortNumber] && outputBus[outputPortNumber]->id == streamID)
+                {
+                    // NO MEMORY DEALLOCATION
+                    worker->disconnectOutput(outputPortNumber);
+
+                    /* The connection is successfull, so we return true */
+                    return true;
+                }
+            }
+        }
+
+        /*
+        * If we arrive here, this means one of the previous three tests failed,
+        * which prevents us from making the disconnection. We therefore stop and
+        * return false.
+        */
+        return false;
+    }
+
+    bool Workflow::executeConnectionInstruction(ConnectionInstruction<STREAM_TO_WORKER, PLUG> instruction)
+    {
+        return plugStreamIntoWorker(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+    }
+
+    bool Workflow::executeConnectionInstruction(ConnectionInstruction<WORKER_TO_STREAM, PLUG> instruction)
+    {
+        return plugWorkerIntoStream(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+    }
+
+    bool Workflow::executeConnectionInstruction(ConnectionInstruction<STREAM_TO_WORKER, UNPLUG> instruction)
+    {
+        return unplugStreamFromWorker(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+    }
+
+    bool Workflow::executeConnectionInstruction(ConnectionInstruction<WORKER_TO_STREAM, UNPLUG> instruction)
+    {
+        return unplugWorkerFromStream(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+    }
+
+    bool Workflow::executeConnectionPlan(ConnectionPlan plan)
+    {
+        bool success = true;
+
+        for (auto instruction : plan.streamToWorkerUnplugInstructions)
+            success = success && unplugStreamFromWorker(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+
+        for (auto instruction : plan.workerToStreamUnplugInstructions)
+            success = success && unplugWorkerFromStream(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+
+        for (auto instruction : plan.streamToWorkerPlugInstructions)
+            success = success && plugStreamIntoWorker(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+
+        for (auto instruction : plan.workerToStreamPlugInstructions)
+            success = success && plugWorkerIntoStream(instruction.uphillID, instruction.downhillID, instruction.portNumber);
+
+        return success;
     }
 
     void Workflow::completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const

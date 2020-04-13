@@ -79,6 +79,16 @@ namespace ANGLECORE
         m_outputBus[index] = newOutputStream;
     }
 
+    void Worker::disconnectInput(unsigned short inputPortNumber)
+    {
+        m_inputBus[inputPortNumber] = nullptr;
+    }
+
+    void Worker::disconnectOutput(unsigned short outputPortNumber)
+    {
+        m_outputBus[outputPortNumber] = nullptr;
+    }
+
     const double* const Worker::getInputStream(unsigned short index) const
     {
         /* If no input stream is connected, we return a null pointer */
@@ -102,6 +112,11 @@ namespace ANGLECORE
     const std::vector<std::shared_ptr<const Stream>>& Worker::getInputBus() const
     {
         return m_inputBus;
+    }
+
+    const std::vector<std::shared_ptr<Stream>>& Worker::getOutputBus() const
+    {
+        return m_outputBus;
     }
 
     bool Worker::hasInputs() const

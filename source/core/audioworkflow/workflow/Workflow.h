@@ -27,6 +27,7 @@
 
 #include "Stream.h"
 #include "Worker.h"
+#include "ConnectionPlan.h"
 
 namespace ANGLECORE
 {
@@ -58,46 +59,135 @@ namespace ANGLECORE
         void addWorker(const std::shared_ptr<Worker>& workerToAdd);
 
         /**
-        * Connects a Stream into a Worker's input bus, at the given \p
-        * inputStreamNumber. If a Stream was already connected at this index, it
-        * will be replaced. Returns true if the connection succeeded, and false
+        * Connects a Stream to a Worker's input bus, at the given \p
+        * inputPortNumber. If a Stream was already connected at this port, it will
+        * be replaced. Returns true if the connection succeeded, and false
         * otherwise. The connection can fail when the Stream or the Worker cannot be
-        * found in the Workflow, or when the \p inputStreamNumber is out-of-range.
-        * Note that, just like any method that modifies the Workflow's connections,
-        * this method is not meant to be fast at all, as it will be called by non
-        * real-time threads only (most likely by a single UI thread). Therefore, in
-        * the absence of any speed requirement, the Stream and Worker are passed in
+        * found in the Workflow, or when the \p inputPortNumber is out-of-range.
+        * Note that the Stream and Worker are passed in using their IDs, which will
+        * cost an extra search before actually creating the connection.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's input
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
+        *   should match a Worker that already exists in the Workflow.
+        * @param[in] inputPortNumber The index of the input Stream to replace in the
+        *   Worker's input bus.
+        */
+        bool plugStreamIntoWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber);
+
+        /**
+        * Connects a Stream to a Worker's output bus, at the given \p
+        * outputPortNumber. If a Stream was already connected at this port, it will
+        * be replaced. Returns true if the connection succeeded, and false
+        * otherwise. The connection can fail when the Stream or the Worker cannot be
+        * found in the Workflow, or when the \p outputPortNumber is out-of-range.
+        * Note that the Stream and Worker are passed in using their IDs, which will
+        * cost an extra search before actually creating the connection.
+        * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
+        *   should match a Worker that already exists in the Workflow.
+        * @param[in] outputPortNumber The index of the output Stream to replace in
+        *   the Worker's output bus.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's output
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        */
+        bool plugWorkerIntoStream(uint32_t workerID, unsigned short outputPortNumber, uint32_t streamID);
+
+        /**
+        * Disconnects a Stream from a Worker's input bus, if and only if it was
+        * connected at the given \p inputPortNumber before. Returns true if the
+        * disconnection succeeded, and false otherwise. The disconnection can fail
+        * when the Stream or the Worker cannot be found in the Workflow, when the \p
+        * inputPortNumber is out-of-range, or when the aforementioned condition does
+        * not hold. In the latter case, if the Stream is not connected to the Worker
+        * on the given port (for example when another Stream is connected instead,
+        * or when no Stream is plugged in), then this method will have no effect and
+        * the disconnection will fail. Note that the Stream and Worker are passed in
         * using their IDs, which will cost an extra search before actually creating
         * the connection.
         * @param[in] streamID The ID of the Stream to connect to the Worker's input
         *   bus. This ID should match a Stream that already exists in the Workflow.
         * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
         *   should match a Worker that already exists in the Workflow.
-        * @param[in] inputStreamNumber The index of the input Stream to replace in
+        * @param[in] inputPortNumber The index of the input Stream to unplug from
         *   the Worker's input bus.
         */
-        bool plugStreamIntoWorker(uint32_t streamID, uint32_t workerID, unsigned short inputStreamNumber);
+        bool unplugStreamFromWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber);
 
         /**
-        * Connects a Stream to a Worker's output bus, at the given \p
-        * outputStreamNumber. If a Stream was already connected at this index, it
-        * will be replaced. Returns true if the connection succeeded, and false
-        * otherwise. The connection can fail when the Stream or the Worker cannot be
-        * found in the Workflow, or when the \p outputStreamNumber is out-of-range.
-        * Note that, just like any method that modifies the Workflow's connections,
-        * this method is not meant to be fast at all, as it will be called by non
-        * real-time threads only (most likely by a single UI thread). Therefore, in
-        * the absence of any speed requirement, the Stream and Worker are passed in
-        * using their IDs, which will cost an extra search before actually creating
-        * the connection.
+        * Disconnects a Stream from a Worker's output bus, if and only if it was
+        * connected at the given \p outputPortNumber before. Returns true if the
+        * disconnection succeeded, and false otherwise. The disconnection can fail
+        * when the Stream or the Worker cannot be found in the Workflow, when the \p
+        * outputPortNumber is out-of-range, or when the aforementioned condition
+        * does not hold. In the latter case, if the Stream is not connected to the
+        * Worker on the given port (for example when another Stream is connected
+        * instead, or when no Stream is plugged in), then this method will have no
+        * effect and the disconnection will fail. Note that the Stream and Worker
+        * are passed in using their IDs, which will cost an extra search before
+        * actually creating the connection.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's input
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        * @param[in] outputPortNumber The index of the output Stream to replace in
+        *   the Worker's input bus.
         * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
         *   should match a Worker that already exists in the Workflow.
-        * @param[in] outputStreamNumber The index of the output Stream to replace in
-        *   the Worker's output bus.
-        * @param[in] streamID The ID of the Stream to connect to the Worker's output
-        *   bus. This ID should match a Stream that already exists in the Workflow.
         */
-        bool plugWorkerIntoStream(uint32_t workerID, unsigned short outputStreamNumber, uint32_t streamID);
+        bool unplugWorkerFromStream(uint32_t workerID, unsigned short outputPortNumber, uint32_t streamID);
+
+        /**
+        * Executes the given instruction, and connects a Stream to a Worker's input
+        * bus. Returns true if the connection succeeded, and false otherwise. This
+        * method simply unfolds its argument and forwards it to the
+        * plugStreamIntoWorker() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<STREAM_TO_WORKER, PLUG> instruction);
+
+        /**
+        * Executes the given instruction, and connects one Worker's output to a
+        * Stream. Returns true if the connection succeeded, and false otherwise.
+        * This method simply unfolds its argument and forwards it to the
+        * plugWorkerIntoStream() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<WORKER_TO_STREAM, PLUG> instruction);
+
+        /**
+        * Executes the given instruction, and disconnects a Stream from a Worker's
+        * input bus. Returns true if the disconnection succeeded, and false
+        * otherwise. This method simply unfolds its argument and forwards it to the
+        * unplugStreamFromWorker() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<STREAM_TO_WORKER, UNPLUG> instruction);
+
+        /**
+        * Executes the given instruction, and disconnects one Worker's output from a
+        * Stream. Returns true if the disconnection succeeded, and false otherwise.
+        * This method simply unfolds its argument and forwards it to the
+        * unplugWorkerFromStream() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<WORKER_TO_STREAM, UNPLUG> instruction);
+
+        /**
+        * Executes the given \p plan, and creates and deletes connections as
+        * instructed. Returns true if all the connection instructions were processed
+        * successfully, and false otherwise, that is if at least one instruction
+        * failed. This method needs to be fast, as it may be called by the real-time
+        * thread at the beginning of each rendering session. Note that, for every
+        * ConnectionInstruction encountered in the plan, this method will call the
+        * plug() and unplug() methods instead of the executeConnectionInstruction()
+        * methods to save up one callback layer.
+        * @param[in] plan The ConnectionPlan to execute. It should refer to existing
+        *   elements in the Workflow, as the execution will partially fail
+        *   otherwise.
+        */
+        bool executeConnectionPlan(ConnectionPlan plan);
 
     protected:
 

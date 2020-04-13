@@ -77,6 +77,24 @@ namespace ANGLECORE
         void connectOutput(unsigned short index, std::shared_ptr<Stream> newOutputStream);
 
         /**
+        * Disconnects any Stream previously connected to the Worker's input bus at
+        * the given \p inputPortNumber. This method could cause memory deallocation
+        * if the Stream only existed within the Worker's input bus, but this should
+        * never be the case.
+        * @param[in] inputPortNumber Index to remove the connection from
+        */
+        void disconnectInput(unsigned short inputPortNumber);
+
+        /**
+        * Disconnects any Stream previously connected to the Worker's output bus at
+        * the given \p outputPortNumber. This method could cause memory deallocation
+        * if the Stream only existed within the Worker's input bus, but this should
+        * never be the case.
+        * @param[in] outputPortNumber Index to remove the connection from
+        */
+        void disconnectOutput(unsigned short outputPortNumber);
+
+        /**
         * Provides a read only access to the Stream at \p index in the input bus.
         * @param[in] index Index of the stream within the input bus.
         */
@@ -93,6 +111,12 @@ namespace ANGLECORE
         * to. The vector may contain null pointers when no stream is attached.
         */
         const std::vector<std::shared_ptr<const Stream>>& getInputBus() const;
+
+        /**
+        * Returns a vector containing all the output streams the worker is connected
+        * to. The vector may contain null pointers when no stream is attached.
+        */
+        const std::vector<std::shared_ptr<Stream>>& getOutputBus() const;
 
         /**
         * Returns true if the input bus is empty, meaning the Worker is actually a
