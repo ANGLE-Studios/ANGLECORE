@@ -239,30 +239,30 @@ namespace ANGLECORE
     {
         uint32_t uphillID;
         uint32_t downhillID;
-        unsigned short index;
+        unsigned short portNumber;
 
         /**
-        * Builds a PlugRequest corresponding to the given link type.
+        * Builds a ConnectionInstruction corresponding to the given link type.
         * @param[in] streamID ID of the Stream that is part of the connection,
         *   either as an input or output Stream for the associated Worker
         * @param[in] workerID ID of the Worker that is part of the connection
-        * @param[in] workerPort Worker's port number, either from the input or
-        *   output bus depending on the ConnectionType
+        * @param[in] workerPortNumber Worker's port number, either from the input
+        *   or output bus depending on the ConnectionType
         */
-        ConnectionInstruction(uint32_t streamID, uint32_t workerID, unsigned short workerPort)
+        ConnectionInstruction(uint32_t streamID, uint32_t workerID, unsigned short workerPortNumber)
         {
             switch (connectionType)
             {
-            case ConnectionType::StreamToWorker:
+            case ConnectionType::STREAM_TO_WORKER:
                 uphillID = streamID;
                 downhillID = workerID;
                 break;
-            case ConnectionType::WorkerToStream:
+            case ConnectionType::WORKER_TO_STREAM:
                 uphillID = workerID;
                 downhillID = streamID;
                 break;
             }
-            index = workerPort;
+            portNumber = workerPortNumber;
         }
     };
 
@@ -439,7 +439,7 @@ namespace ANGLECORE
         *   elements in the Workflow, as the execution will partially fail
         *   otherwise.
         */
-        bool executeConnectionPlan(ConnectionPlan plan);
+        bool executeConnectionPlan(const ConnectionPlan& plan);
 
     protected:
 
@@ -454,10 +454,12 @@ namespace ANGLECORE
         * @param[in] worker The worker to start the computation from. The function
         *   will actually compute which Worker should be called and in which order
         *   to render every input of \p worker.
+        * @param[in] connectionPlan The ConnectionPlan that will be executed next,
+        *   and that should therefore taken into account in the computation
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, const ConnectionPlan& connectionPlan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
         /**
         * Computes the chain of workers that must be called to fill up a given
@@ -466,10 +468,12 @@ namespace ANGLECORE
         * @param[in] stream The Stream to start the computation from. The function
         *   will actually compute which Worker should be called and in which order
         *   to render \p stream.
+        * @param[in] connectionPlan The ConnectionPlan that will be executed next,
+        *   and that should therefore taken into account in the computation
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, const ConnectionPlan& connectionPlan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
     private:
 
@@ -650,7 +654,7 @@ namespace ANGLECORE
         * the real-time thread. Note that the method relies on the move semantics to
         * optimize its vector return.
         */
-        std::vector<std::shared_ptr<Worker>> buildRenderingSequence() const;
+        std::vector<std::shared_ptr<Worker>> buildRenderingSequence(const ConnectionPlan& connectionPlan) const;
 
     private:
         std::shared_ptr<Exporter<float>> m_exporter;

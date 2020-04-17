@@ -187,7 +187,7 @@ namespace ANGLECORE
         *   elements in the Workflow, as the execution will partially fail
         *   otherwise.
         */
-        bool executeConnectionPlan(ConnectionPlan plan);
+        bool executeConnectionPlan(const ConnectionPlan& plan);
 
     protected:
 
@@ -202,10 +202,12 @@ namespace ANGLECORE
         * @param[in] worker The worker to start the computation from. The function
         *   will actually compute which Worker should be called and in which order
         *   to render every input of \p worker.
+        * @param[in] connectionPlan The ConnectionPlan that will be executed next,
+        *   and that should therefore taken into account in the computation
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, const ConnectionPlan& connectionPlan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
         /**
         * Computes the chain of workers that must be called to fill up a given
@@ -214,10 +216,12 @@ namespace ANGLECORE
         * @param[in] stream The Stream to start the computation from. The function
         *   will actually compute which Worker should be called and in which order
         *   to render \p stream.
+        * @param[in] connectionPlan The ConnectionPlan that will be executed next,
+        *   and that should therefore taken into account in the computation
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
-        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
+        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, const ConnectionPlan& connectionPlan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
 
     private:
 

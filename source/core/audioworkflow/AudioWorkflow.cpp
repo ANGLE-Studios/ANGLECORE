@@ -45,10 +45,10 @@ namespace ANGLECORE
         }
     }
 
-    std::vector<std::shared_ptr<Worker>> AudioWorkflow::buildRenderingSequence() const
+    std::vector<std::shared_ptr<Worker>> AudioWorkflow::buildRenderingSequence(const ConnectionPlan& connectionPlan) const
     {
         std::vector<std::shared_ptr<Worker>> renderingSequence;
-        completeRenderingSequenceForWorker(m_exporter, renderingSequence);
+        completeRenderingSequenceForWorker(m_exporter, connectionPlan, renderingSequence);
         return renderingSequence;
     }
 }

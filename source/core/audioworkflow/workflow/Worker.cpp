@@ -22,8 +22,6 @@
 
 #pragma once
 
-#include <algorithm>
-
 #include "Worker.h"
 
 namespace ANGLECORE

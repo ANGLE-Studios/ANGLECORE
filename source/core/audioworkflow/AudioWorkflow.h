@@ -48,8 +48,10 @@ namespace ANGLECORE
         * Exporter. This method allocates memory, so it should never be called by
         * the real-time thread. Note that the method relies on the move semantics to
         * optimize its vector return.
+        * @param[in] connectionPlan The ConnectionPlan that will be executed next,
+        *   and that should therefore taken into account in the computation
         */
-        std::vector<std::shared_ptr<Worker>> buildRenderingSequence() const;
+        std::vector<std::shared_ptr<Worker>> buildRenderingSequence(const ConnectionPlan& connectionPlan) const;
 
     private:
         std::shared_ptr<Exporter<float>> m_exporter;

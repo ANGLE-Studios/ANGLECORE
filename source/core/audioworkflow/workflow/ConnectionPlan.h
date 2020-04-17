@@ -58,10 +58,10 @@ namespace ANGLECORE
         * @param[in] streamID ID of the Stream that is part of the connection,
         *   either as an input or output Stream for the associated Worker
         * @param[in] workerID ID of the Worker that is part of the connection
-        * @param[in] portNumber Worker's port number, either from the input or
-        *   output bus depending on the ConnectionType
+        * @param[in] workerPortNumber Worker's port number, either from the input
+        *   or output bus depending on the ConnectionType
         */
-        ConnectionInstruction(uint32_t streamID, uint32_t workerID, unsigned short portNumber)
+        ConnectionInstruction(uint32_t streamID, uint32_t workerID, unsigned short workerPortNumber)
         {
             switch (connectionType)
             {
@@ -74,7 +74,7 @@ namespace ANGLECORE
                 downhillID = streamID;
                 break;
             }
-            index = portNumber;
+            portNumber = workerPortNumber;
         }
     };
 
