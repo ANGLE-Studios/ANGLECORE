@@ -35,7 +35,7 @@ namespace ANGLECORE
         addWorker(m_mixer);
 
         /* We connect the mixer into the exporter */
-        for (unsigned short int c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+        for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
         {
             std::shared_ptr<Stream> exporterInputStream = std::make_shared<Stream>();
             addStream(exporterInputStream);

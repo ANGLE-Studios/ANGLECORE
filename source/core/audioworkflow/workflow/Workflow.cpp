@@ -299,7 +299,7 @@ namespace ANGLECORE
         * the && operator precedence rule, we need to always put the 'success'
         * variable as the second operand of each AND operation, in order to keep
         * processing instructions even if a trouble was encountered. Otherwise, if
-        * success becomes false at some point, then the expression "success && ..."
+        * success became false at some point, then the expression "success && ..."
         * would never evaluate its second operand, and therefore we would never
         * execute the instruction.
         */
@@ -319,7 +319,7 @@ namespace ANGLECORE
         return success;
     }
 
-    void Workflow::completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, const ConnectionPlan& connectionPlan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const
+    void Workflow::completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, const ConnectionPlan& plan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const
     {
         /*
         * If worker is a nullptr, or of it is not part of the workflow, then we have
@@ -333,16 +333,16 @@ namespace ANGLECORE
         {
             /*
             * We first need to check if the port will be plugged into after the
-            * connectionPlan. If so, then no matter if the port is currently taken
+            * connection plan. If so, then no matter if the port is currently taken
             * or not, or what unplug instructions could be executed first, we simply
             * need to retrieve the new stream that will be connected instead. For
-            * that, we iterate through the connectionPlan in reverse order, so we
-            * only take into account the last valid plug instruction.
+            * that, we iterate through the plan in reverse order, so we only take
+            * into account the last valid plug instruction.
             */
 
             auto& streamToWorkerPlugIterator = std::find_if(
-                connectionPlan.streamToWorkerPlugInstructions.crbegin(),
-                connectionPlan.streamToWorkerPlugInstructions.crend(),
+                plan.streamToWorkerPlugInstructions.crbegin(),
+                plan.streamToWorkerPlugInstructions.crend(),
 
                 /*
                 * We use a lambda function to detect if an instruction matches the
@@ -360,11 +360,11 @@ namespace ANGLECORE
             );
 
             /* Is the port part of a valid PLUG instruction? ... */
-            if (streamToWorkerPlugIterator != connectionPlan.streamToWorkerPlugInstructions.crend())
+            if (streamToWorkerPlugIterator != plan.streamToWorkerPlugInstructions.crend())
             {
                 /*
                 * ... YES! The port will receive a new valid stream after the
-                * connectionPlan is executed. Therefore, we need to use that new
+                * connection plan is executed. Therefore, we need to use that new
                 * stream to compute the next part of the renderingSequence.
                 */
                 auto& streamIterator = m_streams.find(streamToWorkerPlugIterator->uphillID);
@@ -383,7 +383,7 @@ namespace ANGLECORE
                 * called to fill in this stream. We will add the worker at the end
                 * of this sequence, right after the 'for' loop on ports.
                 */
-                completeRenderingSequenceForStream(streamIterator->second, connectionPlan, currentRenderingSequence);
+                completeRenderingSequenceForStream(streamIterator->second, plan, currentRenderingSequence);
             }
 
             /*
@@ -404,8 +404,8 @@ namespace ANGLECORE
                     */
 
                     auto& streamToWorkerUnplugIterator = std::find_if(
-                        connectionPlan.streamToWorkerUnplugInstructions.cbegin(),
-                        connectionPlan.streamToWorkerUnplugInstructions.cend(),
+                        plan.streamToWorkerUnplugInstructions.cbegin(),
+                        plan.streamToWorkerUnplugInstructions.cend(),
 
                         /*
                         * We use a lambda function to detect if an instruction
@@ -423,14 +423,14 @@ namespace ANGLECORE
                     );
 
                     /* Is the port NOT part of any valid UNPLUG instruction? */
-                    if (streamToWorkerUnplugIterator == connectionPlan.streamToWorkerUnplugInstructions.cend())
+                    if (streamToWorkerUnplugIterator == plan.streamToWorkerUnplugInstructions.cend())
                     {
                         /*
                         * ... YES! So we should use the existing stream to continue
                         * our computation. Note that the stream's existence will be
                         * checked again in the following function call.
                         */
-                        completeRenderingSequenceForStream(stream, connectionPlan, currentRenderingSequence);
+                        completeRenderingSequenceForStream(stream, plan, currentRenderingSequence);
                     }
 
                     /*
@@ -459,7 +459,7 @@ namespace ANGLECORE
             currentRenderingSequence.emplace_back(worker);
     }
 
-    void Workflow::completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, const ConnectionPlan& connectionPlan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const
+    void Workflow::completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, const ConnectionPlan& plan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const
     {
         /*
         * If stream is a nullptr, or of it is not part of the workflow, then we have
@@ -470,16 +470,16 @@ namespace ANGLECORE
 
         /*
         * We first need to check if a worker will be plugged into the stream after
-        * the connectionPlan. If so, then no matter if a worker is currently plugged
-        * in or not, or what unplug instructions could be executed first, we simply
-        * need to retrieve the new worker that will be connected instead. For that,
-        * we iterate through the connectionPlan in reverse order, so we only take
-        * into account the last valid plug instruction.
+        * the connection plan. If so, then no matter if a worker is currently
+        * plugged in or not, or what unplug instructions could be executed first, we
+        * simply need to retrieve the new worker that will be connected instead. For
+        * that, we iterate through the plan in reverse order, so we only take into
+        * account the last valid plug instruction.
         */
 
         auto& workerToStreamPlugIterator = std::find_if(
-            connectionPlan.workerToStreamPlugInstructions.crbegin(),
-            connectionPlan.workerToStreamPlugInstructions.crend(),
+            plan.workerToStreamPlugInstructions.crbegin(),
+            plan.workerToStreamPlugInstructions.crend(),
 
             /*
             * We use a lambda function to detect if an instruction matches the
@@ -496,11 +496,11 @@ namespace ANGLECORE
         );
 
         /* Is the stream part of a valid PLUG instruction? ... */
-        if (workerToStreamPlugIterator != connectionPlan.workerToStreamPlugInstructions.crend())
+        if (workerToStreamPlugIterator != plan.workerToStreamPlugInstructions.crend())
         {
             /*
             * ... YES! The stream will be connected to a new input worker after the
-            * connectionPlan is executed. Therefore, we need to use that new worker
+            * connection plan is executed. Therefore, we need to use that new worker
             * to compute the next part of the renderingSequence.
             */
             auto& workerIterator = m_workers.find(workerToStreamPlugIterator->uphillID);
@@ -518,7 +518,7 @@ namespace ANGLECORE
             * retrieve all of the workers that need to be called before it. We will
             * add the worker at the end of this sequence.
             */
-            completeRenderingSequenceForWorker(workerIterator->second, connectionPlan, currentRenderingSequence);
+            completeRenderingSequenceForWorker(workerIterator->second, plan, currentRenderingSequence);
         }
 
         /*
@@ -548,8 +548,8 @@ namespace ANGLECORE
                 */
 
                 auto& workerToStreamUnplugIterator = std::find_if(
-                    connectionPlan.workerToStreamUnplugInstructions.cbegin(),
-                    connectionPlan.workerToStreamUnplugInstructions.cend(),
+                    plan.workerToStreamUnplugInstructions.cbegin(),
+                    plan.workerToStreamUnplugInstructions.cend(),
 
                     /*
                     * We use a lambda function to detect if an unplug instruction
@@ -567,14 +567,14 @@ namespace ANGLECORE
                 );
 
                 /* Is the stream NOT part of any valid UNPLUG instruction? */
-                if (workerToStreamUnplugIterator == connectionPlan.workerToStreamUnplugInstructions.cend())
+                if (workerToStreamUnplugIterator == plan.workerToStreamUnplugInstructions.cend())
                 {
                     /*
                     * ... YES! So we should use its existing input worker to
                     * continue our computation. Note that the stream's existence
                     * will be checked again in the following function call.
                     */
-                    completeRenderingSequenceForWorker(inputWorker, connectionPlan, currentRenderingSequence);
+                    completeRenderingSequenceForWorker(inputWorker, plan, currentRenderingSequence);
                 }
 
                 /*
