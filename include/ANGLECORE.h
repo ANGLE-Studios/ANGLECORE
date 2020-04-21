@@ -679,77 +679,29 @@ namespace ANGLECORE
 
     /*
     =================================================
-    VoiceManager
+    VoiceAssigner
     =================================================
     */
 
     /**
-    * \struct Voice VoiceManager.h
-    * Represents a Voice that can be used to play some sound.
-    */
-    struct Voice
-    {
-        bool isOn;
-        bool isFree;
-        unsigned int noteNumber;
-
-        Voice();
-    };
-
-    /**
-    * \struct VoiceSequenceItem VoiceManager.h
+    * \struct VoiceAssignment VoiceAssigner.h
     * Represents an item in a voice sequence.
     */
-    struct VoiceSequenceItem
+    struct VoiceAssignment
     {
-        bool isGlobal;
+        bool isNull;
         unsigned short voiceNumber;
 
-        VoiceSequenceItem(bool isGlobal, unsigned short voiceNumber);
+        VoiceAssignment(bool isNull, unsigned short voiceNumber);
     };
 
     /**
-    * \class VoiceManager VoiceManager.h
+    * \class VoiceAssigner VoiceAssigner.h
     * Entity that holds and manipulates a fixed number of voices.
     */
-    class VoiceManager
+    class VoiceAssigner
     {
     public:
-
-        /** Creates a VoiceManager with a fixed number of voices */
-        VoiceManager();
-
-        /**
-        * Returns the inquired voice. Note that, just like for every method of the
-        * VoiceManager class, the \p voiceNumber is expected to be in-range. No
-        * safety checks will be performed, mostly to increase speed.
-        * @param[in] voiceNumber ID of the Worker to map
-        * @param[in] voiceNumber Unique number that identifies the Voice \p worker
-        *   should be mapped to
-        */
-        Voice& getVoice(unsigned short voiceNumber);
-
-        /**
-        * Search for Voice that is free and available for rendering. If all the
-        * voices are taken, it will return a nullptr.
-        */
-        Voice* findFreeVoice();
-
-        /**
-        * Turns on the given Voice. Note that because this method will be called by
-        * the real-time thread, it needs to be fast, so it does not check if \p
-        * voiceNumber is in-range.
-        * @param[in] voiceNumber Number of the voice to turn on
-        */
-        void turnOn(unsigned short voiceNumber);
-
-        /**
-        * Turns off the given Voice. Note that, just like for every method of the
-        * VoiceManager class, the \p voiceNumber is expected to be in-range. No
-        * safety checks will be performed, mostly to increase speed.
-        * @param[in] voiceNumber Number of the voice to turn off
-        */
-        void turnOff(unsigned short voiceNumber);
 
         /**
         * Maps a Worker to a Voice, so that the Worker will only be called if the
@@ -757,30 +709,27 @@ namespace ANGLECORE
         * considered global, and will always be rendered. Note that, just like for
         * every method of the VoiceManager class, the \p voiceNumber is expected to
         * be in-range. No safety checks will be performed, mostly to increase speed.
-        * @param[in] workerID ID of the Worker to map
         * @param[in] voiceNumber Unique number that identifies the Voice \p worker
         *   should be mapped to
+        * @param[in] workerID ID of the Worker to map
         */
-        void attachWorkerToVoice(uint32_t workerID, unsigned short voiceNumber);
+        void assignVoiceToWorker(unsigned short voiceNumber, uint32_t workerID);
 
         /**
-        * Removes a Worker from a Voice, only if it was already mapped to it before.
-        * Afterwards, the Worker will be considered global.
+        * Removes a Worker from its pre-assigned Voice. If the Worker was not
+        * assigned a Voice, this method will simply return without any side effect.
         * @param[in] workerID ID of the Worker to unmap
         */
-        void detachWorkerFromVoice(uint32_t workerID);
+        void revokeAssignments(uint32_t workerID);
 
-        std::vector<VoiceSequenceItem> buildVoiceSequenceFromRenderingSequence(const std::vector<std::shared_ptr<Worker>>& renderingSequence) const;
+        std::vector<VoiceAssignment> getVoiceAssignments(const std::vector<std::shared_ptr<Worker>>& workers) const;
 
     private:
-
-        /** Fixed-size vector of voices */
-        std::vector<Voice> m_voices;
 
         /**
         * Maps a Worker to its parent Voice, if relevant. Workers are referred to
         * with their ID, and voices with their number.
         */
-        std::unordered_map<uint32_t, unsigned short> m_voiceAttachments;
+        std::unordered_map<uint32_t, unsigned short> m_voiceAssignments;
     };
 }

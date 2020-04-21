@@ -20,8 +20,6 @@
 **
 **********************************************************************/
 
-#include <algorithm>
-
 #include "VoiceManager.h"
 
 #include "../../config/AudioConfig.h"
@@ -37,26 +35,12 @@ namespace ANGLECORE
         noteNumber(0)
     {}
 
-    /* VoiceSequenceItem
-    ***************************************************/
-
-    VoiceSequenceItem::VoiceSequenceItem(bool isGlobal, unsigned short voiceNumber) :
-        isGlobal(isGlobal),
-        voiceNumber(voiceNumber)
-    {}
-
-
     /* VoiceManager
     ***************************************************/
 
     VoiceManager::VoiceManager() :
         m_voices(ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES)
     {}
-
-    Voice& VoiceManager::getVoice(unsigned short voiceNumber)
-    {
-        return m_voices[voiceNumber];
-    }
 
     Voice* VoiceManager::findFreeVoice()
     {
@@ -83,38 +67,5 @@ namespace ANGLECORE
     void VoiceManager::turnOff(unsigned short voiceNumber)
     {
         m_voices[voiceNumber].isOn = false;
-    }
-
-    void VoiceManager::attachWorkerToVoice(uint32_t workerID, unsigned short voiceNumber)
-    {
-        /* We simply register a new pair in the parent voices map: */
-        m_voiceAttachments[workerID] = voiceNumber;
-    }
-
-    void VoiceManager::detachWorkerFromVoice(uint32_t workerID)
-    {
-        /* We simply delete the related pair in the parent voices map: */
-        m_voiceAttachments.erase(workerID);
-    }
-
-    std::vector<VoiceSequenceItem> VoiceManager::buildVoiceSequenceFromRenderingSequence(const std::vector<std::shared_ptr<Worker>>& renderingSequence) const
-    {
-        std::vector<VoiceSequenceItem> voiceSequence;
-        voiceSequence.reserve(renderingSequence.size());
-
-        /*
-        * The assume the rendering sequence has been constructed from a workflow,
-        * which implies it only contains non-null pointers.
-        */
-        for (const std::shared_ptr<Worker>& worker : renderingSequence)
-        {
-            auto voiceNumberIterator = m_voiceAttachments.find(worker->id);
-            if (voiceNumberIterator != m_voiceAttachments.end())
-                voiceSequence.emplace_back(false, voiceNumberIterator->second);
-            else
-                voiceSequence.emplace_back(true, 0);
-        }
-
-        return voiceSequence;
     }
 }
