@@ -22,8 +22,9 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <memory>
+#include <vector>
+#include <unordered_map>
 
 #include "workflow/Workflow.h"
 #include "Exporter.h"
