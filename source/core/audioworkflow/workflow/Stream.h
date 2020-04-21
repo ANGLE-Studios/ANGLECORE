@@ -47,7 +47,7 @@ namespace ANGLECORE
         Stream(const Stream& other) = delete;
 
         /**
-        * Delete the stream and its internal buffer.
+        * Deletes the stream and its internal buffer.
         */
         ~Stream();
 
