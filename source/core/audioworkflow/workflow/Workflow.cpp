@@ -50,18 +50,6 @@ namespace ANGLECORE
             m_workers[workerToAdd->id] = workerToAdd;
     }
 
-    bool Workflow::containsStream(uint32_t streamID)
-    {
-        /* We look for the given stream in the workflow's stream map. */
-        return m_streams.find(streamID) != m_streams.end();
-    }
-
-    bool Workflow::containsWorker(uint32_t workerID)
-    {
-        /* We look for the given worker in the workflow's worker map. */
-        return m_workers.find(workerID) != m_workers.end();
-    }
-
     bool Workflow::plugStreamIntoWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber)
     {
         /*

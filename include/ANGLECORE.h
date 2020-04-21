@@ -311,20 +311,6 @@ namespace ANGLECORE
         void addWorker(const std::shared_ptr<Worker>& workerToAdd);
 
         /**
-        * Returns true if the Workflow contains a Stream with the given ID, and
-        * false otherwise.
-        * @param[in] streamID The ID of the Stream to look for
-        */
-        bool containsStream(uint32_t streamID);
-
-        /**
-        * Returns true if the Workflow contains a Worker with the given ID, and
-        * false otherwise.
-        * @param[in] workerID The ID of the Worker to look for
-        */
-        bool containsWorker(uint32_t workerID);
-
-        /**
         * Connects a Stream to a Worker's input bus, at the given \p
         * inputPortNumber. If a Stream was already connected at this port, it will
         * be replaced. Returns true if the connection succeeded, and false
