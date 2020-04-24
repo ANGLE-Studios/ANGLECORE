@@ -23,18 +23,19 @@
 #include "Mixer.h"
 
 #include "../../config/AudioConfig.h"
+#include "../../config/RenderingConfig.h"
 
 namespace ANGLECORE
 {
     Mixer::Mixer() :
-        Worker(ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES * ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS, ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS),
-        m_totalNumInstruments(ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES * ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE)
+        Worker(ANGLECORE_NUM_VOICES * ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE * ANGLECORE_NUM_CHANNELS, ANGLECORE_NUM_CHANNELS),
+        m_totalNumInstruments(ANGLECORE_NUM_VOICES * ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
     {}
 
     void Mixer::work(unsigned int numSamplesToWorkOn)
     {
 
-        for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+        for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
         {
             double* output = getOutputStream(c);
 
@@ -56,7 +57,7 @@ namespace ANGLECORE
             */
             for (unsigned short i = 0; i < m_totalNumInstruments; i++)
             {
-                const double* input = getInputStream(i * ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS + c);
+                const double* input = getInputStream(i * ANGLECORE_NUM_CHANNELS + c);
 
                 /* We check if an input stream is plugged in before summing */
                 if (input)

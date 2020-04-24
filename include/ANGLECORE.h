@@ -503,7 +503,7 @@ namespace ANGLECORE
     =================================================
     */
 
-    #define ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS 2
+    #define ANGLECORE_NUM_CHANNELS 2
     #define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
 
     /**
@@ -521,7 +521,7 @@ namespace ANGLECORE
         * Creates a Worker with zero output.
         */
         Exporter() :
-            Worker(ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS, 0),
+            Worker(ANGLECORE_NUM_CHANNELS, 0),
             m_outputBuffer(nullptr),
             m_numOutputChannels(0)
         {}
@@ -552,7 +552,7 @@ namespace ANGLECORE
             * If the host request less channels than rendered, we sum their
             * content using a modulo approach.
             */
-            if (m_numOutputChannels < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)
+            if (m_numOutputChannels < ANGLECORE_NUM_CHANNELS)
             {
                 /* We first clear the output buffer */
                 for (unsigned short c = 0; c < m_numOutputChannels; c++)
@@ -560,7 +560,7 @@ namespace ANGLECORE
                         m_outputBuffer[c][i] = 0.0;
 
                 /* And then we compute the sum into the output buffer */
-                for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+                for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
                     for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
                         m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
             }
@@ -573,7 +573,7 @@ namespace ANGLECORE
             {
                 for (unsigned int c = 0; c < m_numOutputChannels; c++)
                     for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i] = static_cast<OutputType>(getInputStream(c % ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+                        m_outputBuffer[c][i] = static_cast<OutputType>(getInputStream(c % ANGLECORE_NUM_CHANNELS)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
             }
         }
 

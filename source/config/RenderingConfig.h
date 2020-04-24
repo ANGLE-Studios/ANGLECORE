@@ -23,7 +23,8 @@
 #pragma once
 
 /**********************************************************************
-** WORKFLOW
+** MEMORY
 **********************************************************************/
 
 #define ANGLECORE_FIXED_STREAM_SIZE 256    /**< Fixed size to use for rendering (the rendering will be splitted into chunks of this size). */
+#define ANGLECORE_NUM_VOICES 32
