@@ -22,546 +22,642 @@
 
 #pragma once
 
-#include <mutex>
+#include <stdint.h>
 #include <memory>
 #include <vector>
-#include <atomic>
 #include <unordered_map>
-#include <cstring>
-#include <functional>
-
-
-/*
-=================================================
-StringView
-=================================================
-*/
-
-namespace ANGLECORE
-{
-    struct StringView
-    {
-        /**
-        * The constructor simply stores the provided pointer to C string internally.
-        * It hereby provides an implicit conversion from const char* to StringView.
-        */
-        StringView(const char* str);
-
-        /**
-        * Comparing two StringViews consists in comparing their internal C strings,
-        * using strcmp.
-        */
-        bool operator==(const StringView& other) const;
-
-        /** This is the internal pointer to the C string being viewed */
-        const char* string_ptr;
-    };
-}
-
-namespace std {
-
-    /**
-    * In order to be used as a key within a standard key-value container, a StringView
-    * must have a dedicated hash function. Otherwise, only the internal pointer will be
-    * hashed, which will not produce the desired effect. Therefore, we have to
-    * specialize the standard hash structure to our StringView type.
-    */
-    template<>
-    struct hash<ANGLECORE::StringView>
-    {
-        size_t operator()(const ANGLECORE::StringView& view) const;
-    };
-}
 
 namespace ANGLECORE
 {
 
     /*
     =================================================
-    AudioChunk
+    Workflow
     =================================================
     */
 
 
-    template<typename T>
-    struct AudioChunk
+    /**
+    * \struct WorkflowItem WorkflowItem.h
+    * Item of a workflow, with a unique ID.
+    */
+    struct WorkflowItem
     {
-        T** const rawData;
-        const unsigned short numChannels;
-        const uint32_t startSample;
-        const uint32_t numSamples;
+        /** The ID of the workflow item. */
+        const uint32_t id;
 
         /**
-        * The constructor just copies the arguments into the structure's attributes.
+        * The constructor simply defines an ID for the new item, using a static
+        * integer variable.
         */
-        AudioChunk(T** rawData, unsigned short numChannels, uint32_t startSample, uint32_t numSamples) :
-            rawData(rawData),
-            numChannels(numChannels),
-            startSample(startSample),
-            numSamples(numSamples)
+        WorkflowItem();
+
+    private:
+
+        /**
+        * This static variable is used to define a unique ID for each item in the
+        * workflow. Whenever an item is created, this integer is incremented. Note
+        * that using this method for creating IDs exposes our system to possible ID
+        * duplicates, especially with overflow. This should not a problem here:
+        * since the upper limit of uint32_t is approximately 4 billions, we are
+        * protected against 4 billions item creations, so we should be safe.
+        */
+        static uint32_t nextId;
+    };
+
+    /**
+    * \class Stream Stream.h
+    * Owner of a data stream used in the rendering process. The class implements
+    * RAII.
+    */
+    class Stream :
+        public WorkflowItem
+    {
+    public:
+
+        /**
+        * Creates a stream of constant size for rendering.
+        */
+        Stream();
+
+        /**
+        * Delete the copy constructor.
+        */
+        Stream(const Stream& other) = delete;
+
+        /**
+        * Deletes the stream and its internal buffer.
+        */
+        ~Stream();
+
+        /** Provides a read access to the internal buffer. */
+        const double* const getDataForReading() const;
+
+        /** Provides a write access to the internal buffer. */
+        double* const getDataForWriting();
+
+    private:
+
+        /** Internal buffer */
+        double* data;
+    };
+
+    /**
+    * \class Worker Worker.h
+    * Represents an agent that processes input streams into output streams. This is
+    * an abstract class.
+    */
+    class Worker :
+        public WorkflowItem
+    {
+    public:
+
+        /**
+        * Resizes the internal vectors of streams, and initializes all the Stream
+        * pointers to nullptr. To be fully operational, the WorkflowManager needs to
+        * connect the Worker's input and output to valid streams.
+        * @param[in] numInputs Number of inputs.
+        * @param[in] numOutputs Number of output.
+        */
+        Worker(unsigned short numInputs, unsigned short numOutputs);
+
+        /** Returns the number of inputs in the input bus */
+        unsigned short getNumInputs() const;
+
+        /** Returns the number of outputs in the output bus */
+        unsigned short getNumOutputs() const;
+
+        /**
+        * Connects the Worker's input at \p index to the given Stream. Note that if
+        * an input Stream was already connected at the given index in the input bus,
+        * it will be replaced by the new one.
+        * @param[in] index Which index to connect the stream to within the input
+        *   bus.
+        * @param[in] newOutputStream A pointer to the new input stream to work from.
+        */
+        void connectInput(unsigned short index, std::shared_ptr<const Stream> newInputStream);
+
+        /**
+        * Connects the Worker's output at \p index to the given Stream. Note that if
+        * an output Stream was already connected at the given index in the output
+        * bus, it will be replaced by the new one.
+        * @param[in] index Which index to connect the stream to within the output
+        *   bus.
+        * @param[in] newOutputStream A pointer to the new output stream to work
+        *   into.
+        */
+        void connectOutput(unsigned short index, std::shared_ptr<Stream> newOutputStream);
+
+        /**
+        * Disconnects any Stream previously connected to the Worker's input bus at
+        * the given \p inputPortNumber. This method could cause memory deallocation
+        * if the Stream only existed within the Worker's input bus, but this should
+        * never be the case.
+        * @param[in] inputPortNumber Index to remove the connection from
+        */
+        void disconnectInput(unsigned short inputPortNumber);
+
+        /**
+        * Disconnects any Stream previously connected to the Worker's output bus at
+        * the given \p outputPortNumber. This method could cause memory deallocation
+        * if the Stream only existed within the Worker's input bus, but this should
+        * never be the case.
+        * @param[in] outputPortNumber Index to remove the connection from
+        */
+        void disconnectOutput(unsigned short outputPortNumber);
+
+        /**
+        * Provides a read only access to the Stream at \p index in the input bus.
+        * @param[in] index Index of the stream within the input bus.
+        */
+        const double* const getInputStream(unsigned short index) const;
+
+        /**
+        * Provides a write access to the Stream at \p index in the output bus.
+        * @param[in] index Index of the stream within the output bus.
+        */
+        double* getOutputStream(unsigned short index) const;
+
+        /**
+        * Returns a vector containing all the input streams the worker is connected
+        * to. The vector may contain null pointers when no stream is attached.
+        */
+        const std::vector<std::shared_ptr<const Stream>>& getInputBus() const;
+
+        /**
+        * Returns a vector containing all the output streams the worker is connected
+        * to. The vector may contain null pointers when no stream is attached.
+        */
+        const std::vector<std::shared_ptr<Stream>>& getOutputBus() const;
+
+        /**
+        * Returns true if the input bus is empty, meaning the Worker is actually a
+        * generator, and false otherwise.
+        */
+        bool hasInputs() const;
+
+        /**
+        * Computes the values of every output Stream based on the input streams.
+        * This method should be overriden in each sub-class to perform rendering.
+        * Note that this method should be really fast, and lock-free. Also note this
+        * is the only method of this class that can be called by the real-time
+        * thread.
+        * @param[in] numSamplesToWorkOn number of samples to generate or process.
+        *   This should always be less than or equal to the renderer's buffer size.
+        */
+        virtual void work(unsigned int numSamplesToWorkOn) = 0;
+
+    private:
+        const unsigned short m_numInputs;
+        const unsigned short m_numOutputs;
+        std::vector<std::shared_ptr<const Stream>> m_inputBus;
+        std::vector<std::shared_ptr<Stream>> m_outputBus;
+        const bool m_hasInputs;
+    };
+
+    /** Type of connection to use in a ConnectionInstruction */
+    enum ConnectionType
+    {
+        STREAM_TO_WORKER, /**< Connection from a Stream to a Worker's input bus */
+        WORKER_TO_STREAM  /**< Connection from a Worker's output bus to a Stream */
+    };
+
+    /** Type of instruction to perform in a ConnectionInstruction */
+    enum InstructionType
+    {
+        PLUG,   /**< Request to make a connection */
+        UNPLUG  /**< Request to remove a connection */
+    };
+
+    /**
+    * \struct ConnectionInstruction ConnectionPlan.h
+    * Instruction to either connect or disconnect two Workflow items, one being a
+    * Stream and the other a Worker. Both items are referred to with their ID.
+    */
+    template<ConnectionType connectionType, InstructionType instructionType>
+    struct ConnectionInstruction
+    {
+        uint32_t uphillID;
+        uint32_t downhillID;
+        unsigned short portNumber;
+
+        /**
+        * Builds a ConnectionInstruction corresponding to the given link type.
+        * @param[in] streamID ID of the Stream that is part of the connection,
+        *   either as an input or output Stream for the associated Worker
+        * @param[in] workerID ID of the Worker that is part of the connection
+        * @param[in] workerPortNumber Worker's port number, either from the input
+        *   or output bus depending on the ConnectionType
+        */
+        ConnectionInstruction(uint32_t streamID, uint32_t workerID, unsigned short workerPortNumber)
+        {
+            switch (connectionType)
+            {
+            case ConnectionType::STREAM_TO_WORKER:
+                uphillID = streamID;
+                downhillID = workerID;
+                break;
+            case ConnectionType::WORKER_TO_STREAM:
+                uphillID = workerID;
+                downhillID = streamID;
+                break;
+            }
+            portNumber = workerPortNumber;
+        }
+    };
+
+    /**
+    * \struct ConnectionPlan ConnectionPlan.h
+    * Set of instructions to perform on the connections of an AudioWorkflow. This
+    * structure also contains a rendering sequence, which corresponds to the one we
+    * would obtain if the request had been proceeded. It is here to be precomputed
+    * in advance, and it should replace the real-time thread's rendering sequence
+    * when the latter is done with the request. By convention UNPLUG instructions
+    * will be executed first, and PLUG instructions second.
+    */
+    struct ConnectionPlan
+    {
+        std::vector<ConnectionInstruction<STREAM_TO_WORKER, UNPLUG>> streamToWorkerUnplugInstructions;
+        std::vector<ConnectionInstruction<WORKER_TO_STREAM, UNPLUG>> workerToStreamUnplugInstructions;
+        std::vector<ConnectionInstruction<STREAM_TO_WORKER, PLUG>> streamToWorkerPlugInstructions;
+        std::vector<ConnectionInstruction<WORKER_TO_STREAM, PLUG>> workerToStreamPlugInstructions;
+    };
+
+    /**
+    * \class Workflow Workflow.h
+    * Represents a set of instructions as a succession of workers and streams. A
+    * Workflow should not contain any feedback.
+    */
+    class Workflow
+    {
+    public:
+
+        /**
+        * Adds the given Stream into the Workflow, and updates the workflow's
+        * internal ID-Stream map accordingly. Note that streams are never created by
+        * the Workflow itself, but rather passed as arguments after being created by
+        * a dedicated entity.
+        * @param[in] streamToAdd The Stream to add into the Workflow.
+        */
+        void addStream(const std::shared_ptr<Stream>& streamToAdd);
+
+        /**
+        * Adds the given Worker into the Workflow, and updates the workflow's
+        * internal ID-Worker map accordingly. Note that workers are never created by
+        * the Workflow itself, but rather passed as arguments after being created by
+        * a dedicated entity.
+        * @param[in] workerToAdd The Worker to add into the Workflow.
+        */
+        void addWorker(const std::shared_ptr<Worker>& workerToAdd);
+
+        /**
+        * Connects a Stream to a Worker's input bus, at the given \p
+        * inputPortNumber. If a Stream was already connected at this port, it will
+        * be replaced. Returns true if the connection succeeded, and false
+        * otherwise. The connection can fail when the Stream or the Worker cannot be
+        * found in the Workflow, or when the \p inputPortNumber is out-of-range.
+        * Note that the Stream and Worker are passed in using their IDs, which will
+        * cost an extra search before actually creating the connection.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's input
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
+        *   should match a Worker that already exists in the Workflow.
+        * @param[in] inputPortNumber The index of the input Stream to replace in the
+        *   Worker's input bus.
+        */
+        bool plugStreamIntoWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber);
+
+        /**
+        * Connects a Stream to a Worker's output bus, at the given \p
+        * outputPortNumber. If a Stream was already connected at this port, it will
+        * be replaced. Returns true if the connection succeeded, and false
+        * otherwise. The connection can fail when the Stream or the Worker cannot be
+        * found in the Workflow, or when the \p outputPortNumber is out-of-range.
+        * Note that the Stream and Worker are passed in using their IDs, which will
+        * cost an extra search before actually creating the connection.
+        * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
+        *   should match a Worker that already exists in the Workflow.
+        * @param[in] outputPortNumber The index of the output Stream to replace in
+        *   the Worker's output bus.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's output
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        */
+        bool plugWorkerIntoStream(uint32_t workerID, unsigned short outputPortNumber, uint32_t streamID);
+
+        /**
+        * Disconnects a Stream from a Worker's input bus, if and only if it was
+        * connected at the given \p inputPortNumber before. Returns true if the
+        * disconnection succeeded, and false otherwise. The disconnection can fail
+        * when the Stream or the Worker cannot be found in the Workflow, when the \p
+        * inputPortNumber is out-of-range, or when the aforementioned condition does
+        * not hold. In the latter case, if the Stream is not connected to the Worker
+        * on the given port (for example when another Stream is connected instead,
+        * or when no Stream is plugged in), then this method will have no effect and
+        * the disconnection will fail. Note that the Stream and Worker are passed in
+        * using their IDs, which will cost an extra search before actually creating
+        * the connection.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's input
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
+        *   should match a Worker that already exists in the Workflow.
+        * @param[in] inputPortNumber The index of the input Stream to unplug from
+        *   the Worker's input bus.
+        */
+        bool unplugStreamFromWorker(uint32_t streamID, uint32_t workerID, unsigned short inputPortNumber);
+
+        /**
+        * Disconnects a Stream from a Worker's output bus, if and only if it was
+        * connected at the given \p outputPortNumber before. Returns true if the
+        * disconnection succeeded, and false otherwise. The disconnection can fail
+        * when the Stream or the Worker cannot be found in the Workflow, when the \p
+        * outputPortNumber is out-of-range, or when the aforementioned condition
+        * does not hold. In the latter case, if the Stream is not connected to the
+        * Worker on the given port (for example when another Stream is connected
+        * instead, or when no Stream is plugged in), then this method will have no
+        * effect and the disconnection will fail. Note that the Stream and Worker
+        * are passed in using their IDs, which will cost an extra search before
+        * actually creating the connection.
+        * @param[in] streamID The ID of the Stream to connect to the Worker's input
+        *   bus. This ID should match a Stream that already exists in the Workflow.
+        * @param[in] outputPortNumber The index of the output Stream to replace in
+        *   the Worker's input bus.
+        * @param[in] workerID The ID of the Worker to connect to the Stream. This ID
+        *   should match a Worker that already exists in the Workflow.
+        */
+        bool unplugWorkerFromStream(uint32_t workerID, unsigned short outputPortNumber, uint32_t streamID);
+
+        /**
+        * Executes the given instruction, and connects a Stream to a Worker's input
+        * bus. Returns true if the connection succeeded, and false otherwise. This
+        * method simply unfolds its argument and forwards it to the
+        * plugStreamIntoWorker() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<STREAM_TO_WORKER, PLUG> instruction);
+
+        /**
+        * Executes the given instruction, and connects one Worker's output to a
+        * Stream. Returns true if the connection succeeded, and false otherwise.
+        * This method simply unfolds its argument and forwards it to the
+        * plugWorkerIntoStream() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<WORKER_TO_STREAM, PLUG> instruction);
+
+        /**
+        * Executes the given instruction, and disconnects a Stream from a Worker's
+        * input bus. Returns true if the disconnection succeeded, and false
+        * otherwise. This method simply unfolds its argument and forwards it to the
+        * unplugStreamFromWorker() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<STREAM_TO_WORKER, UNPLUG> instruction);
+
+        /**
+        * Executes the given instruction, and disconnects one Worker's output from a
+        * Stream. Returns true if the disconnection succeeded, and false otherwise.
+        * This method simply unfolds its argument and forwards it to the
+        * unplugWorkerFromStream() method.
+        * @param[in] instruction The instruction to execute. It should refer to
+        *   existing elements in the Workflow, as the execution will fail otherwise.
+        */
+        bool executeConnectionInstruction(ConnectionInstruction<WORKER_TO_STREAM, UNPLUG> instruction);
+
+        /**
+        * Executes the given \p plan, and creates and deletes connections as
+        * instructed. Returns true if all the connection instructions were processed
+        * successfully, and false otherwise, that is if at least one instruction
+        * failed. This method needs to be fast, as it may be called by the real-time
+        * thread at the beginning of each rendering session. Note that, for every
+        * ConnectionInstruction encountered in the plan, this method will call the
+        * plug() and unplug() methods instead of the executeConnectionInstruction()
+        * methods to save up one callback layer.
+        * @param[in] plan The ConnectionPlan to execute. It should refer to existing
+        *   elements in the Workflow, as the execution will partially fail
+        *   otherwise.
+        */
+        bool executeConnectionPlan(const ConnectionPlan& plan);
+
+    protected:
+
+        /**
+        * This method is a recursive utility function for exploring the Workflow's
+        * tree-like structure. It computes the chain of workers that must be called
+        * before calling a given \p worker, and appends all of the workers
+        * encountered (including the provided \p worker) at the end of a given
+        * sequence. The calculation keeps track of the order with which the workers
+        * should be called for the rendering to be successful, which is why the
+        * result is called a "Rendering Sequence".
+        * @param[in] worker The worker to start the computation from. The function
+        *   will actually compute which Worker should be called and in which order
+        *   to render every input of \p worker.
+        * @param[in] plan The ConnectionPlan that will be executed next, and which
+        *   should be therefore taken into account in the computation
+        * @param[out] currentRenderingSequence The output sequence of the
+        *   computation, which is recursively filled up.
+        */
+        void completeRenderingSequenceForWorker(const std::shared_ptr<Worker>& worker, const ConnectionPlan& plan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
+
+        /**
+        * Computes the chain of workers that must be called to fill up a given
+        * \p stream. This method simply retrieve the Stream's input Worker, and call
+        * completeRenderingSequenceForWorker() with that worker.
+        * @param[in] stream The Stream to start the computation from. The function
+        *   will actually compute which Worker should be called and in which order
+        *   to render \p stream.
+        * @param[in] plan The ConnectionPlan that will be executed next, and which
+        *   should be therefore taken into account in the computation
+        * @param[out] currentRenderingSequence The output sequence of the
+        *   computation, which is recursively filled up.
+        */
+        void completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, const ConnectionPlan& plan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const;
+
+    private:
+
+        /**
+        * Maps a Stream with its ID, hereby providing an ID-based access to a Stream
+        * in constant time. This unordered_map will always verify:
+        * m_streams[i]->id == i.
+        */
+        std::unordered_map<uint32_t, std::shared_ptr<Stream>> m_streams;
+
+        /**
+        * Maps a Worker with its ID, hereby providing an ID-based access to a Worker
+        * in constant time. This unordered_map will always verify:
+        * m_workers[i]->id == i.
+        */
+        std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_workers;
+
+        /** Maps a Stream ID to its input worker */
+        std::unordered_map<uint32_t, std::shared_ptr<Worker>> m_inputWorkers;
+    };
+
+
+
+    /*
+    =================================================
+    AudioWorkflow
+    =================================================
+    */
+
+    #define ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS 2
+    #define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
+
+    /**
+    * \class Exporter Exporter.h
+    * Worker that exports data from its input streams into an output buffer sent
+    * to the host. An exporter applies a gain for calibrating its output level.
+    */
+    template<typename OutputType>
+    class Exporter :
+        public Worker
+    {
+    public:
+
+        /**
+        * Creates a Worker with zero output.
+        */
+        Exporter() :
+            Worker(ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS, 0),
+            m_outputBuffer(nullptr),
+            m_numOutputChannels(0)
         {}
 
-        /*
-        * Because we do not want the audio chunk to be assignable, we delete the
-        * assignment operator
-        */
-        AudioChunk& operator=(const AudioChunk<T>& other) = delete;
-    };
-
-
-    /*
-    =================================================
-    BaseInstrument
-    =================================================
-    */
-
-
-    /**
-    * \struct InverseUnion Instrument.h
-    * Provides a simple solution to perform atomic operations on a number and its
-    * inverse.
-    */
-    template<typename T>
-    struct InverseUnion
-    {
-        T value;    /**< Double or float value of a real number*/
-        T inverse;  /**< Double or float value of the inverse of value*/
-    };
-
-    /**
-    * \class BaseInstrument Instrument.h
-    * This abstract class can be used to create audio instruments that manage internal
-    * parameters automatically. The Instrument class also provides that functionnality,
-    * with the additional benefit of also providing default parameters.
-    */
-    class BaseInstrument
-    {
-    protected:
-
         /**
-        * \struct Parameter Instrument.h
-        * Represents a parameter that an instrument can modify and use for rendering.
+        * Sets the new memory location to write into when exporting.
+        * @param[in] buffer The new memory location.
+        * @param[in] numChannels Number of output channels.
         */
-        struct Parameter
+        void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
         {
-            /**
-            * \struct TransientTracker Instrument.h
-            * A TransientTracker tracks a Parameter's position while in a transient
-            * state. This structure can store how close the Parameter is to its
-            * target value (in terms of remaining samples), as well as the increment
-            * to use for its update.
-            * Additionally, this structure contains a mutex for trade-safe operations.
-            */
-            struct TransientTracker
-            {
-                std::mutex lock;
-                double targetValue;
-                uint32_t transientDurationInSamples;
-                uint32_t position;
-                double increment;
-            };
+            m_outputBuffer = buffer;
+            m_numOutputChannels = numChannels;
+            m_startSample = startSample;
+        }
 
-            /**
-            * \struct ChangeRequest Instrument.h
-            * When the end-user asks to change a parameter from an instrument (volume,
-            * etc.), an instance of this structure is created to store all necessary
-            * information about that ChangeRequest.
-            */
-            struct ChangeRequest
-            {
-                double targetValue;
-                bool smoothChange;
-                uint32_t durationInSamples;
-
-                /**
-                * Creates a null ChangeRequest, which instructs to instantly set a
-                * Parameter to 0 in a duration of 0 samples.
-                */
-                ChangeRequest();
-
-                /**
-                * Initializes all the members of a ChangeRequest.
-                * @param[in] newValue   Target value for the parameter required to
-                *   change. This parameter will simply be copied into targetValue.
-                * @param[in] shouldBeSmooth Indicates if the parameter should change
-                *   instantaneously or go through a transient phase. This parameter
-                *   will simply be copied into smoothChange.
-                * @param[in] numSamples Number of samples the transient phase should
-                *   last. This parameter will simply be copied into
-                *   durationInSamples, but it will only be used if \p shouldBeSmooth
-                *   has been set to \p true.
-                */
-                ChangeRequest(double newValue, bool shouldBeSmooth, uint32_t numSamples);
-            };
-
-            /**
-            * \struct ChangeRequestDeposit Instrument.h
-            * This structure represents a thread-safe mailbox. Every time the
-            * end-user requests a parameter change, a new ChangeRequest is posted
-            * here.
-            * Additionally, this structure contains a mutex for trade-safe operations.
-            */
-            struct ChangeRequestDeposit
-            {
-                std::mutex lock;
-                bool newChangeRequestReceived;
-                ChangeRequest data;
-
-                /**
-                * Initializes all the const members of the internal ChangeRequest.
-                */
-                ChangeRequestDeposit();
-            };
-
-            /**
-            * \enum State
-            * Represents the internal state of a parameter. The ParameterRenderer
-            * will adapt to this state for its rendering.
-            */
-            enum State
-            {
-                INITIAL = 0,    /**< Parameter state right after its creation */
-                STEADY,         /**< The parameter has a constant value */
-                TRANSIENT,      /**< The parameter is currently changing its value */
-                NUM_STATES      /**< Counts the number of possible states */
-            };
-
-            /**
-            * \enum SmoothingMethod
-            * Method used to render a smooth parameter change. If set to ADDITIVE,
-            * then a parameter change will result in an arithmetic sequence from an
-            * initial value to a target value. If set to MULTIPLICATIVE, then the
-            * sequence will be geometric and use a multiplicative increment instead.
-            */
-            enum SmoothingMethod
-            {
-                ADDITIVE = 0,   /**< Generates an arithmetic sequence */
-                MULTIPLICATIVE, /**< Generates a geometric sequence */
-                NUM_METHODS     /**< Counts the number of available methods */
-            };
-
-            const bool minimalSmoothingEnabled;
-            const SmoothingMethod smoothingMethod;
-            std::atomic<State> state;
-            std::atomic<double> internalValue;
-            std::unique_ptr<std::vector<double>> transientCurve;
-            ChangeRequestDeposit changeRequestDeposit;
-            TransientTracker transientTracker;
-
-            /**
-            * Creates a parameter with a fixed smoothing technique.
-            * @param[in] initialValue   Value to initialize the parameter's
-            *   internalValue.
-            * @param[in] minimalSmoothing   Indicates whether the parameter should
-            *   enter a transient phase when requested to change, even if the
-            *   corresponding ChangeRequest is meant to be instantaneous.
-            * @param[in] smoothingMethod    Method to use for computing the
-            *   evolution of a Parameter in a transient phase.
-            */
-            Parameter(double initialValue, bool minimalSmoothing, SmoothingMethod smoothingMethod);
-
-            /**
-            * Allocates memory for storing the parameter transient curves.
-            * This method should be called only once after creating a parameter, as
-            * no memory allocation should be performed during real-time rendering.
-            * @param[in]    maxSamplesPerBlock  Upper bound of the number of samples
-            *   expected per block to render. This limit is used to preallocate
-            *   a sufficient amount of memory in advance for efficient rendering.
-            */
-            void initialize(uint32_t maxSamplesPerBlock);
-        };
-
-        /**
-        * \class ParameterRenderer Instrument.h
-        * A ParameterRenderer is an object that prerenders the values of all the
-        * parameters of an instrument to prepare the latter for its audioCallback.
-        * A ParameterRenderer typically computes any smooth parameter change or
-        * modulation in advance, so that the instrument can subsequently do its
-        * rendering faster.
-        */
-        class ParameterRenderer
+        void work(unsigned int numSamplesToWorkOn)
         {
-        public:
-
-            /**
-            * Creates a parameter renderer dedicated to a set of parameters, usually
-            * those of a single BaseInstrument.
-            * Before the renderer receives any sample rate, m_minSmoothingSamples is
-            * set to 0.
-            * @param[in] parameters&    Reference to the parameter set to be rendered
-            *   through this renderer.
-            * @param[in] minimalSmoothingDuration   Minimal duration of all transient
-            *   phases when using this renderer.
+            /*
+            * It is assumed that both m_numOutputChannels and numSamplesToWorkOn
+            * are in-range, i.e. less than or equal to the output buffer's
+            * number of channels and the stream and buffer size respectively. It
+            * is also assumed the output buffer has been properly set to a valid
+            * memory location.
             */
-            ParameterRenderer(std::unordered_map<StringView, std::shared_ptr<Parameter>>& parameters, double minimalSmoothingDuration);
 
-            /**
-            * Sends a new sample rate to the ParameterRenderer.
-            * The new \p sampleRate is then used to update the number of samples
-            * needed to render a minimal smoothing transient.
-            * @param[in] sampleRate the new sample rate to use for rendering
+            /*
+            * If the host request less channels than rendered, we sum their
+            * content using a modulo approach.
             */
-            void setSampleRate(double sampleRate);
+            if (m_numOutputChannels < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)
+            {
+                /* We first clear the output buffer */
+                for (unsigned short c = 0; c < m_numOutputChannels; c++)
+                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
+                        m_outputBuffer[c][i] = 0.0;
 
-            /**
-            * Sends a new upper bound on the rendering block size to the
-            * ParameterRenderer. This can lead the renderer to reallocate more
-            * memory for all parameters, in preparation of their future rendering.
-            * @param[in] maxSamplesPerBlock New maximum block size to use for
-            *   rendering.
+                /* And then we compute the sum into the output buffer */
+                for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
+                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
+                        m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+            }
+
+            /*
+            * Otherwise, if we have not rendered enough channels for the host,
+            * we simply duplicate data.
             */
-            void setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock);
-
-            /**
-            * Instructs the renderer to render all of the parameters it is attached
-            * to.
-            * This method is called at the beginning of an BaseInstrument
-            * audioCallback function, in order to precompute the values of all
-            * parameters for the next audio block to render. Depending on each
-            * parameter's state, the renderer will trigger different computations,
-            * and process every ChangeRequest is has received.
-            * @param[in] blockSize  Size of the audio block to render. This
-            *   corresponds to the number of samples the ParameterRenderer has to
-            *   prepare for all of its parameters.
-            */
-            void renderParametersForNextAudioChunk(uint32_t chunkSize);
-
-            /**
-            * Updates the state of every parameter after having rendered an audio
-            * block of size \p blockSize.
-            * This method is called at the end of an BaseInstrument
-            * audioCallback function, to update the parameters in a transient state.
-            * More precisely, this method increments the TransientTracker of all
-            * parameters in transient state, and updates the internalValue of those
-            * to their latest value.
-            * @param[in] blockSize  Size of the audio block that has just been
-            *   rendered.
-            */
-            void updateParametersAfterRendering(uint32_t blockSize);
-
-        private:
-
-            std::unordered_map<StringView, std::shared_ptr<Parameter>>& m_parameters;
-            const double m_minSmoothingDuration;
-            std::atomic<uint32_t> m_minSmoothingSamples;
-        };
-
-        /**
-        * \enum State
-        * Represents the internal state of an audio instrument. The audioCallback
-        * method of an instrument will adapt to this state when called for rendering.
-        */
-        enum State
-        {
-            INITIAL = 0,    /**< Corresponds to the instrument's state right after
-                            its creation */
-            READY_TO_PLAY,  /**< Corresponds to the instrument's state after a sample
-                            rate and a number of maximum samples per block have been
-                            defined */
-            NUM_STATES      /**< Counts the number of states */
-        };
-
-    public:
-
-        /**
-        * Creates an empty instrument, with no parameters inside.
-        */
-        BaseInstrument();
-
-        /**
-        * Initializes the instrument, providing it with a sample rate and number of
-        * maximum samples per block. Calling this method will push the instrument
-        * into the READY_TO_PLAY state.
-        * @param[in] sampleRate Sample rate to use for rendering
-        * @param[in] maxSamplesPerBlock Maximum block size to use for rendering
-        */
-        void initialize(double sampleRate, uint32_t maxSamplesPerBlock);
-
-        /**
-        * Changes the instrument's sample rate. Note that this will not affect the
-        * instrument's state. Use the initialize function to trigger a state
-        * update instead to do so.
-        * @param[in] sampleRate New sample rate to use for rendering
-        */
-        void setSampleRate(double sampleRate);
-
-        /**
-        * Sends a new upper bound on the rendering block size to the
-        * BaseInstrument. This usually triggers memory allocation, to prepare
-        * for rendering future audio blocks of size \p maxSamplesPerBlock.
-        * @param[in] maxSamplesPerBlock New maximum block size to use for
-        *   rendering.
-        */
-        void setMaxSamplesPerBlock(uint32_t maxSamplesPerBlock);
-
-        /**
-        * Creates and posts a ChangeRequest for the corresponding Parameter. The
-        * ChangeRequest will be used by the ParameterRenderer to compute the next
-        * values of the Parameter.
-        * Note that a sequence of multiple calls to this method will result in only
-        * the most recent request to be proceeded for the next audio block.
-        * @param[in] ID Identifier of the Parameter
-        * @param[in] newValue   Target value requested for the Parameter
-        * @param[in] changeShouldBeSmooth   Indicates if the parameter should change
-        *   instantaneously or go through a transient phase.
-        * @param[in] durationInSamples  Number of samples the transient phase should
-        *   last.
-        */
-        void requestParameterChange(const char* ID, double newValue, bool changeShouldBeSmooth, uint32_t durationInSamples);
-
-        /**
-        * Requests the instrument to render the next audio chunk.
-        * @param[in] audioChunkToFill   The AudioChunk to render to.
-        */
-        void audioCallback(AudioChunk<double>& audioChunkToFill);
-
-    protected:
-
-        /**
-        * Returns the instrument's current sample rate. This should only be used
-        * once per render block, because it requires a copy of the sampleRate
-        * InverseUnion.
-        */
-        double sampleRate() const;
-
-        /**
-        * Returns the inverse of the instrument's current sample rate. This should
-        * only be used once per render block, because it requires a copy of the
-        * sampleRate InverseUnion.
-        */
-        double inverseSampleRate() const;
-
-        /**
-        * Creates and adds a parameter to the instrument. Note that adding a
-        * parameter which ID is already used by another parameter will replace the
-        * old parameter by the new one.
-        * This method should only be called in the instrument's constructor, as the
-        * set of parameters (m_parameters) is not protected for thread-safety.
-        * @param[in] ID Identifier of the Parameter to create
-        * @param[in] initialValue   Value to initialize the Parameter's
-        *   internalValue.
-        * @param[in] minimalSmoothing   Indicates whether the parameter should
-        *   enter a transient phase when requested to change, even if the
-        *   change is required to be instantaneous.
-        * @param[in] smoothingMethod    Method to use for computing the evolution of
-        * a Parameter in a transient phase.
-        */
-        void addParameter(const char* ID, double initialValue, bool minimalSmoothing, Parameter::SmoothingMethod smoothingMethod);
-
-        /**
-        * Retrieve the value of a Parameter at a certain \p index in the current
-        * audio block being rendered. The method should be inline, as it may be
-        * called a lot of times during rendering. However it is currently not,
-        * since it would prevent users of the library from accessing it.
-        * @param[in] ID Identifier of the Parameter to retrieve the value from
-        * @param[in] index  Positing in the current audio block
-        */
-        double parameter(const char* ID, uint32_t index) const;
-
-        /**
-        * Retrieve a const Parameter for rendering. This method should be preferred
-        * to the parameter(ID, index) method which tests the parameter's state on
-        * each call. The method should be inline, as it may be called a lot of times
-        * during rendering. However it is currently not, since it would prevent
-        * users of the library from accessing it.
-        * @param[in] ID Identifier of the Parameter to retrieve the value from
-        */
-        const std::shared_ptr<const Parameter> parameter(const char* ID) const;
-
-        /**
-        * Rendering method of an instrument, which is called once all the parameters
-        * have been rendered.
-        */
-        virtual void renderNextAudioChunk(AudioChunk<double>& audioChunkToFill) = 0;
+            else
+            {
+                for (unsigned int c = 0; c < m_numOutputChannels; c++)
+                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
+                        m_outputBuffer[c][i] = static_cast<OutputType>(getInputStream(c % ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+            }
+        }
 
     private:
-        std::atomic<State> m_state;
-        std::atomic<InverseUnion<double>> m_sampleRate;
-        std::unordered_map<StringView, std::shared_ptr<Parameter>> m_parameters;
-        ParameterRenderer m_parameterRenderer;
+        OutputType** m_outputBuffer;
+        unsigned short m_numOutputChannels;
+        uint32_t m_startSample;
     };
 
     /**
-    * \class Instrument Instrument.h
-    * This abstract class can be used to create audio instruments.
-    * Just like the BaseInstrument class, it manages internal
-    * parameters automatically, and is capable of smoothing any
-    * parameter change. However, it features default parameters
-    * that can be monitored through dedicated methods. These
-    * parameters are: frequency to play, velocity, and gain.
+    * \class Mixer Mixer.h
+    * Worker that sums all of its non-nullptr input stream, based on the audio
+    * channel they each represent.
     */
-    class Instrument : public BaseInstrument
+    class Mixer :
+        public Worker
     {
     public:
 
         /**
-        * Creates a BaseInstrument, and populates it with three parameters:
-        * a frequency to play for the next audio block, a velocity, and a gain.
+        * Initializes the Worker's buses size according to the audio
+        * configuration (number of channels, number of instruments...)
         */
-        Instrument();
+        Mixer();
 
         /**
-        * Requests the Instrument to play a new frequency.
-        * Note that a sequence of multiple calls to this method will result in only
-        * the most recent request to be proceeded for the next audio block.
-        * @param[in] frequency   New frequency to use for rendering
-        * @param[in] changeShouldBeSmooth   Indicates if the frequency should change
-        *   instantaneously or go through a transient phase
-        * @param[in] durationInSamples  Number of samples the transient phase should
-        *   last
+        * Mixes all the channels together
         */
-        void requestNewFrequencyToPlay(double frequency, bool changeShouldBeSmooth, uint32_t durationInSamples);
-
-        /**
-        * Requests the Instrument to use a new velocity to play.
-        * Note that a sequence of multiple calls to this method will result in only
-        * the most recent request to be proceeded for the next audio block.
-        * @param[in] velocity   New velocity to use for rendering
-        * @param[in] changeShouldBeSmooth   Indicates if the velocity should change
-        *   instantaneously or go through a transient phase
-        * @param[in] durationInSamples  Number of samples the transient phase should
-        *   last
-        */
-        void requestNewVelocity(double velocity, bool changeShouldBeSmooth, uint32_t durationInSamples);
-
-        /**
-        * Requests the Instrument to change the gain.
-        * Note that a sequence of multiple calls to this method will result in only
-        * the most recent request to be proceeded for the next audio block.
-        * @param[in] gain   New gain to apply where necessary during rendering
-        * @param[in] changeShouldBeSmooth   Indicates if the gain should change
-        *   instantaneously or go through a transient phase
-        * @param[in] durationInSamples  Number of samples the transient phase should
-        *   last
-        */
-        void requestNewGain(double gain, bool changeShouldBeSmooth, uint32_t durationInSamples);
-
-    protected:
-
-        /**
-        * Retrieve the frequency to play at a certain \p index in the current audio
-        * block being rendered.
-        * @param[in] index  Positing in the current audio block
-        */
-        double frequencyToPlay(uint32_t index);
-
-        /**
-        * Retrieve the velocity for a certain \p index in the current audio block
-        * being rendered.
-        * @param[in] index  Positing in the current audio block
-        */
-        double velocity(uint32_t index);
-
-        /**
-        * Retrieve the gain to use for a certain \p index in the current audio block
-        * being rendered.
-        * @param[in] index  Positing in the current audio block
-        */
-        double gain(uint32_t index);
+        void work(unsigned int numSamplesToWorkOn);
 
     private:
-        static const char* PARAMETER_ID_FREQUENCY_TO_PLAY;
-        static const char* PARAMETER_ID_VELOCITY;
-        static const char* PARAMETER_ID_GAIN;
+        const unsigned short m_totalNumInstruments;
+    };
+
+    /**
+    * \class Builder Builder.h
+    * Abstract class representing an object that is able to build worfklow items.
+    */
+    class Builder
+    {
+        /**
+        * \struct WorkflowIsland Builder.h
+        * Isolated subset of a workflow, which is not connected to the real-time
+        * rendering pipeline yet, but will be connected to the whole workflow by the
+        * real-time thread.
+        */
+        struct WorkflowIsland
+        {
+            std::vector<std::shared_ptr<Stream>> streams;
+            std::vector<std::shared_ptr<Worker>> workers;
+        };
+
+        /* We rely on the default constructor */
+        
+        /**
+        * Builds and returns a WorkflowIsland for a Workflow to integrate. This
+        * method should be overriden in each sub-class to construct the appropriate
+        * WorkflowIsland.
+        */
+        virtual std::shared_ptr<WorkflowIsland> build() = 0;
+    };
+
+    /**
+    * \class AudioWorkflow AudioWorkflow.h
+    * Workflow internally structured to generate an audio output. It consists of a
+    * succession of workers and streams, and it should not contain any feedback.
+    */
+    class AudioWorkflow :
+        public Workflow
+    {
+    public:
+        /** Builds the base structure of the AudioWorkflow (Exporter, Mixer...) */
+        AudioWorkflow();
+
+        /**
+        * Builds and returns the Workflow's rendering sequence, starting from its
+        * Exporter. This method allocates memory, so it should never be called by
+        * the real-time thread. Note that the method relies on the move semantics to
+        * optimize its vector return.
+        */
+        std::vector<std::shared_ptr<Worker>> buildRenderingSequence(const ConnectionPlan& connectionPlan) const;
+
+    private:
+        std::shared_ptr<Exporter<float>> m_exporter;
+        std::shared_ptr<Mixer> m_mixer;
     };
 }

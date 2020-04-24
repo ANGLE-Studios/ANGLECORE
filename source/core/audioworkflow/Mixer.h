@@ -22,18 +22,32 @@
 
 #pragma once
 
-/**********************************************************************
-** AUDIO WORKFLOW
-**********************************************************************/
+#include "workflow/Worker.h"
 
-#define ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS 2
-#define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_VOICES 32
-#define ANGLECORE_AUDIOWORKFLOW_MAX_NUM_INSTRUMENTS_PER_VOICE 10
-#define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
+namespace ANGLECORE
+{
+    /**
+    * \class Mixer Mixer.h
+    * Worker that sums all of its non-nullptr input stream, based on the audio
+    * channel they each represent.
+    */
+    class Mixer :
+        public Worker
+    {
+    public:
 
-/**********************************************************************
-** INSTRUMENT
-**********************************************************************/
+        /**
+        * Initializes the Worker's buses size according to the audio
+        * configuration (number of channels, number of instruments...)
+        */
+        Mixer();
 
-#define ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION 0.005   /**< Minimum duration to change the parameter of an instrument, in seconds */
-#define ANGLECORE_INSTRUMENT_PARAMETER_MINIMUM_NONZERO_LEVEL 0.00001    /**< Minimum value to use when computing log() or multiplications during parameters' transients in an instrument */
+        /**
+        * Mixes all the channels together
+        */
+        void work(unsigned int numSamplesToWorkOn);
+
+    private:
+        const unsigned short m_totalNumInstruments;
+    };
+}
