@@ -24,15 +24,35 @@
 
 #include <memory>
 #include <vector>
+#include <stdint.h>
+#include <atomic>
 
-#include "../workflow/ConnectionPlan.h"
-#include "../workflow/Worker.h"
+#include "../audioworkflow/workflow/ConnectionPlan.h"
+#include "../audioworkflow/workflow/Worker.h"
+#include "../voiceassigner/VoiceAssigner.h"
 
 namespace ANGLECORE
 {
+    /**
+    * \struct ConnectionRequest ConnectionRequest.h
+    * Request to execute a ConnectionPlan on a Workflow. A ConnectionRequest
+    * contains both the ConnectionPlan and its consequences (the new rendering
+    * sequence and voice assignments after the plan is executed), which should be
+    * computed in advance for the Renderer.
+    */
     struct ConnectionRequest
     {
         ConnectionPlan plan;
         std::vector<std::shared_ptr<Worker>> newRenderingSequence;
+        std::vector<VoiceAssignment> newVoiceAssignments;
+
+        /**
+        * This vector provides pre-allocated memory for the renderer's increment
+        * computation. It should always be of the same size as newRenderingSequence
+        * and newVoiceAssignments, and should always end with the number 1.
+        */
+        std::vector<uint32_t> oneIncrements;
+
+        ConnectionRequest();
     };
 }
