@@ -52,6 +52,7 @@ namespace ANGLECORE
         * Sets the new memory location to write into when exporting.
         * @param[in] buffer The new memory location.
         * @param[in] numChannels Number of output channels.
+        * @param[in] startSample Position to start from in the buffer.
         */
         void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
         {

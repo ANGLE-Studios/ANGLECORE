@@ -42,7 +42,7 @@ namespace ANGLECORE
 
         /**
         * Resizes the internal vectors of streams, and initializes all the Stream
-        * pointers to nullptr. To be fully operational, the WorkflowManager needs to
+        * pointers to nullptr. To be fully operational, the Workflow needs to
         * connect the Worker's input and output to valid streams.
         * @param[in] numInputs Number of inputs.
         * @param[in] numOutputs Number of output.

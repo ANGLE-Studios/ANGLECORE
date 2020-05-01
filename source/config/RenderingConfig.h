@@ -28,3 +28,4 @@
 
 #define ANGLECORE_FIXED_STREAM_SIZE 256    /**< Fixed size to use for rendering (the rendering will be splitted into chunks of this size). */
 #define ANGLECORE_NUM_VOICES 32
+#define ANGLECORE_MIDIBUFFER_SIZE 2048     /**< Minimum number of MIDI messages the engine can handle without resizing. */

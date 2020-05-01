@@ -118,7 +118,7 @@ namespace ANGLECORE
 
         /**
         * Resizes the internal vectors of streams, and initializes all the Stream
-        * pointers to nullptr. To be fully operational, the WorkflowManager needs to
+        * pointers to nullptr. To be fully operational, the Workflow needs to
         * connect the Worker's input and output to valid streams.
         * @param[in] numInputs Number of inputs.
         * @param[in] numOutputs Number of output.
@@ -534,6 +534,7 @@ namespace ANGLECORE
         * Sets the new memory location to write into when exporting.
         * @param[in] buffer The new memory location.
         * @param[in] numChannels Number of output channels.
+        * @param[in] startSample Position to start from in the buffer.
         */
         void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
         {
@@ -1186,5 +1187,87 @@ namespace ANGLECORE
             farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
             farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
         > m_connectionRequests;
+    };
+
+
+
+    /*
+    =================================================
+    Master
+    =================================================
+    */
+
+    /**
+    * \struct MIDIMessage MIDIBuffer.h
+    * Represents a MIDI message supported by the Master object.
+    */
+    struct MIDIMessage
+    {
+        /** Types of MIDI messages supported by the Master object */
+        enum Type
+        {
+            NONE = 0,       /**< MIDI Messages of this type will be ignored */
+            NOTE_ON,
+            NOTE_OFF,
+            ALL_NOTES_OFF,
+            ALL_SOUND_OFF,
+            NUM_TYPES
+        };
+
+        /** Type of MIDI message */
+        Type type;
+
+        /**
+        * Timestamp of the message as a sample position within the current audio
+        * buffer
+        */
+        uint32_t sample;
+
+        unsigned char noteNumber;
+
+        /**
+        * Creates a MIDI message of type NONE, and initializes every attribute to
+        * their default value.
+        */
+        MIDIMessage();
+    };
+
+    /**
+    * \class MIDIBuffer MIDIBuffer.h
+    * Buffer of MIDI messages.
+    */
+    class MIDIBuffer
+    {
+    public:
+
+        /** Creates a MIDI buffer of fixed size */
+        MIDIBuffer();
+
+        /**
+        * Returns the number of MIDI messages contained in the buffer. This will be
+        * different from the buffer's capacity.
+        */
+        uint32_t getNumMIDIMessages() const;
+
+        /**
+        * Adds a new empty MIDIMessage at the end of the buffer, and returns a
+        * reference to it.
+        */
+        MIDIMessage& pushBackNewMIDIMessage();
+
+        /** Removes every MIDIMessage from the buffer. */
+        void clear();
+
+        /**
+        * Provides a read an write access to the MIDI messages.
+        * @param[in] index Position of the MIDIMessage to retrieve from the buffer.
+        *   It should be in-range, as it will not be checked at runtime.
+        */
+        MIDIMessage& operator[](uint32_t index);
+
+    private:
+        uint32_t m_capacity;
+        std::vector<MIDIMessage> m_messages;
+        uint32_t m_numMessages;
     };
 }
