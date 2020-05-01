@@ -136,12 +136,14 @@ namespace ANGLECORE
         */
         std::vector<uint32_t> m_increments;
 
-        /** Tracks the on/off status of every voice */
+        /** Tracks the on/off status of every Voice */
         bool m_voiceIsOn[ANGLECORE_NUM_VOICES];
         
         /**
-        * Flag that indicates whether to recompute the increments or not on the next
-        * call to the render method.
+        * Flag that indicates whether to recompute the increments or not in the next
+        * rendering session. This flag is useful for preventing the Renderer from
+        * updating its increments twice, after a Voice has been turned on or off and
+        * a new ConnectionRequest has been received.
         */
         bool m_shouldUpdateIncrements;
 

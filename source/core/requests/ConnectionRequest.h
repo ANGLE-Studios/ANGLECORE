@@ -38,7 +38,15 @@ namespace ANGLECORE
     * Request to execute a ConnectionPlan on a Workflow. A ConnectionRequest
     * contains both the ConnectionPlan and its consequences (the new rendering
     * sequence and voice assignments after the plan is executed), which should be
-    * computed in advance for the Renderer.
+    * computed in advance for the Renderer. To be valid, a ConnectionRequest should
+    * verify the following two properties:
+    * 1. None of its three vectors newRenderingSequence, newVoiceAssignments, and
+    * oneIncrements should be empty;
+    * 2. All of those three vectors should be of the same length.
+    * .
+    * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
+    * should be computed from the ConnectionPlan by the AudioWorkflow and
+    * VoiceAssigner respectively.
     */
     struct ConnectionRequest
     {
@@ -47,11 +55,21 @@ namespace ANGLECORE
         std::vector<VoiceAssignment> newVoiceAssignments;
 
         /**
-        * This vector provides pre-allocated memory for the renderer's increment
+        * This vector provides pre-allocated memory for the Renderer's increment
         * computation. It should always be of the same size as newRenderingSequence
         * and newVoiceAssignments, and should always end with the number 1.
         */
         std::vector<uint32_t> oneIncrements;
+
+        /**
+        * Equals true if the request has been received and successfully executed by
+        * the Renderer. Equals false if the request has not been received, if it is
+        * not valid (its argument do not verify the two properties described in the
+        * ConnectionRequest documentation) and was therefore ignored by the
+        * Renderer, or if at least one of the ConnectionInstruction failed when the
+        * ConnectionPlan was executed.
+        */
+        std::atomic<bool> hasBeenSuccessfullyProcessed;
 
         ConnectionRequest();
     };

@@ -85,12 +85,15 @@ namespace ANGLECORE
                 if (size > 0 && request->newVoiceAssignments.size() == size && request->oneIncrements.size() == size)
                 {
                     /* The request is valid, so execute the ConnectionPlan... */
-                    m_workflow.executeConnectionPlan(request->plan);
+                    bool success = m_workflow.executeConnectionPlan(request->plan);
 
                     /*
-                    * ... And then we move every vector from the request to the
-                    * renderer
+                    * ... And notify the Master through the request if the execution
+                    * was a success:
                     */
+                    request->hasBeenSuccessfullyProcessed.store(success);
+
+                    /* Then we move every vector from the request to the renderer */
                     m_renderingSequence = std::move(request->newRenderingSequence);
                     m_voiceAssignments = std::move(request->newVoiceAssignments);
                     m_increments = std::move(request->oneIncrements);
@@ -101,8 +104,9 @@ namespace ANGLECORE
                     * oneIncrements are in a valid but unspecified state. So the
                     * Master should never try to access these vectors once it has
                     * posted a ConnectionRequest. The Master can still access the
-                    * hasBeenProcessed atomic variable though, and use it to detect
-                    * when the real-time thread is done with the ConnectionRequest.
+                    * hasBeenSuccessfullyProcessed atomic variable though, and use
+                    * it to detect if the real-time thread has executed the
+                    * ConnectionRequest successfully.
                     */
 
                     m_isReadyToRender = true;
