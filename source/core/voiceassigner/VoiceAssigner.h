@@ -55,9 +55,9 @@ namespace ANGLECORE
         /**
         * Maps a Worker to a Voice, so that the Worker will only be called if the
         * Voice is on at runtime. If a Worker is not part of any Voice, it will be
-        * considered global, and will always be rendered. Note that, just like for
-        * every method of the VoiceManager class, the \p voiceNumber is expected to
-        * be in-range. No safety checks will be performed, mostly to increase speed.
+        * considered global, and will always be rendered. Note that the
+        * \p voiceNumber is expected to be in-range. No safety checks will be
+        * performed, mostly to increase speed.
         * @param[in] voiceNumber Unique number that identifies the Voice \p worker
         *   should be mapped to
         * @param[in] workerID ID of the Worker to map

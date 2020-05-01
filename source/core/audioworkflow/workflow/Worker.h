@@ -95,7 +95,7 @@ namespace ANGLECORE
         void disconnectOutput(unsigned short outputPortNumber);
 
         /**
-        * Provides a read only access to the Stream at \p index in the input bus.
+        * Provides a read-only access to the Stream at \p index in the input bus.
         * @param[in] index Index of the stream within the input bus.
         */
         const double* const getInputStream(unsigned short index) const;
