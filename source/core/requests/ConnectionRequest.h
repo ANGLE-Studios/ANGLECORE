@@ -45,8 +45,7 @@ namespace ANGLECORE
     * 2. All of those three vectors should be of the same length.
     * .
     * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
-    * should be computed from the ConnectionPlan by the AudioWorkflow and
-    * VoiceAssigner respectively.
+    * should be computed from the same ConnectionPlan and by the same AudioWorkflow.
     */
     struct ConnectionRequest
     {

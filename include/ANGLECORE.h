@@ -745,7 +745,7 @@ namespace ANGLECORE
         * the real-time thread. Note that the method relies on the move semantics to
         * optimize its vector return.
         * @param[in] connectionPlan The ConnectionPlan that will be executed next,
-        *   and that should therefore taken into account in the computation
+        *   and that should therefore be taken into account in the computation
         */
         std::vector<std::shared_ptr<Worker>> buildRenderingSequence(const ConnectionPlan& connectionPlan) const;
 
@@ -1063,8 +1063,7 @@ namespace ANGLECORE
     * 2. All of those three vectors should be of the same length.
     * .
     * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
-    * should be computed from the ConnectionPlan by the AudioWorkflow and
-    * VoiceAssigner respectively.
+    * should be computed from the same ConnectionPlan and by the same AudioWorkflow.
     */
     struct ConnectionRequest
     {
