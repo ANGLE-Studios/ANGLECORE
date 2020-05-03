@@ -24,7 +24,7 @@
 
 #include "VoiceAssigner.h"
 
-#include "../../config/AudioConfig.h"
+#include "../../../config/AudioConfig.h"
 
 namespace ANGLECORE
 {

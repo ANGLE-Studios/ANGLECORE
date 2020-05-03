@@ -28,6 +28,7 @@ namespace ANGLECORE
 {
     AudioWorkflow::AudioWorkflow() :
         Workflow(),
+        VoiceAssigner(),
         m_exporter(std::make_shared<Exporter<float>>()),
         m_mixer(std::make_shared<Mixer>())
     {
@@ -50,5 +51,10 @@ namespace ANGLECORE
         std::vector<std::shared_ptr<Worker>> renderingSequence;
         completeRenderingSequenceForWorker(m_exporter, connectionPlan, renderingSequence);
         return renderingSequence;
+    }
+
+    void AudioWorkflow::setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample)
+    {
+        m_exporter->setOutputBuffer(buffer, numChannels, startSample);
     }
 }

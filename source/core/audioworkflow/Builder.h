@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <vector>
+#include <stdint.h>
 
 #include "workflow/Stream.h"
 #include "workflow/Worker.h"
@@ -31,30 +32,45 @@
 namespace ANGLECORE
 {
     /**
-    * \class Builder Builder.h
-    * Abstract class representing an object that is able to build worfklow items.
+    * \struct Environment Builder.h
+    * Collection of workflow items built by a Builder. All the elements from an
+    * Environment are isolated from the real-time rendering pipeline at first, and
+    * will be connected to the whole workflow by the real-time thread. This,
+    * however, does not prevent these items from being connected between themselves.
     */
+    struct Environment
+    {
+        std::vector<std::shared_ptr<Stream>> streams;
+        std::vector<std::shared_ptr<Worker>> workers;
+    };
+
+    /**
+    * \struct InstrumentEnvironment Builder.h
+    * Environment of an Instrument.
+    */
+    struct InstrumentEnvironment :
+        public Environment
+    {
+        bool shouldReceiveFrequency;
+        uint32_t frequencyReceiverID;
+        unsigned short frequencyPortNumber;
+    };
+
+    /**
+    * \class Builder Builder.h
+    * Abstract class representing an object that is able to build a set of worfklow
+    * items, packed together into an Environment.
+    */
+    template<class EnvironmentType>
     class Builder
     {
-        /**
-        * \struct WorkflowIsland Builder.h
-        * Isolated subset of a workflow, which is not connected to the real-time
-        * rendering pipeline yet, but will be connected to the whole workflow by the
-        * real-time thread.
-        */
-        struct WorkflowIsland
-        {
-            std::vector<std::shared_ptr<Stream>> streams;
-            std::vector<std::shared_ptr<Worker>> workers;
-        };
+    public:
 
-        /* We rely on the default constructor */
-        
         /**
-        * Builds and returns a WorkflowIsland for a Workflow to integrate. This
-        * method should be overriden in each sub-class to construct the appropriate
-        * WorkflowIsland.
+        * Builds and returns an Environment for a Workflow to integrate. This method
+        * should be overriden in each sub-class to construct the appropriate
+        * Environment.
         */
-        virtual std::shared_ptr<WorkflowIsland> build() = 0;
+        virtual std::shared_ptr<EnvironmentType> build() = 0;
     };
 }

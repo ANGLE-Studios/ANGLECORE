@@ -27,7 +27,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "../audioworkflow/workflow/Worker.h"
+#include "../workflow/Worker.h"
 
 namespace ANGLECORE
 {

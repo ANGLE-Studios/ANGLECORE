@@ -503,6 +503,75 @@ namespace ANGLECORE
 
     /*
     =================================================
+    VoiceAssigner
+    =================================================
+    */
+
+    /**
+    * \struct VoiceAssignment VoiceAssigner.h
+    * Represents an item in a voice sequence.
+    */
+    struct VoiceAssignment
+    {
+        bool isNull;
+        unsigned short voiceNumber;
+
+        VoiceAssignment(bool isNull, unsigned short voiceNumber);
+    };
+
+    /**
+    * \class VoiceAssigner VoiceAssigner.h
+    * Entity that assigns workers to voices, and keep track of its assingments
+    * internally.
+    */
+    class VoiceAssigner
+    {
+    public:
+
+        /**
+        * Maps a Worker to a Voice, so that the Worker will only be called if the
+        * Voice is on at runtime. If a Worker is not part of any Voice, it will be
+        * considered global, and will always be rendered. Note that the
+        * \p voiceNumber is expected to be in-range. No safety checks will be
+        * performed, mostly to increase speed.
+        * @param[in] voiceNumber Unique number that identifies the Voice \p worker
+        *   should be mapped to
+        * @param[in] workerID ID of the Worker to map
+        */
+        void assignVoiceToWorker(unsigned short voiceNumber, uint32_t workerID);
+
+        /**
+        * Revokes every assignment the given Worker was related to. If the Worker
+        * was not assigned a Voice, this method will simply return without any side
+        * effect.
+        * @param[in] workerID ID of the Worker to unmap
+        */
+        void revokeAssignments(uint32_t workerID);
+
+        /**
+        * Returns the voices assigned to each Worker in the \p workers vector. The
+        * vector returned will be of the same size as the input vector. If a Worker
+        * was not assigned any Voice, its corresponding VoiceAssignment will be
+        * null. Note that this method relies on move semantics for efficiency.
+        * @param[in] workers Vector of workers to retrieve the assigned voices from.
+        *   The vector should not contain any null pointer, and should preferably be
+        *   the rendering sequence of an AudioWorkflow.
+        */
+        std::vector<VoiceAssignment> getVoiceAssignments(const std::vector<std::shared_ptr<Worker>>& workers) const;
+
+    private:
+
+        /**
+        * Maps a Worker to its assigned Voice, if relevant. Workers are referred to
+        * with their ID, and voices with their number.
+        */
+        std::unordered_map<uint32_t, unsigned short> m_voiceAssignments;
+    };
+
+
+
+    /*
+    =================================================
     AudioWorkflow
     =================================================
     */
@@ -614,31 +683,46 @@ namespace ANGLECORE
     };
 
     /**
-    * \class Builder Builder.h
-    * Abstract class representing an object that is able to build worfklow items.
+    * \struct Environment Builder.h
+    * Collection of workflow items built by a Builder. All the elements from an
+    * Environment are isolated from the real-time rendering pipeline at first, and
+    * will be connected to the whole workflow by the real-time thread. This,
+    * however, does not prevent these items from being connected between themselves.
     */
+    struct Environment
+    {
+        std::vector<std::shared_ptr<Stream>> streams;
+        std::vector<std::shared_ptr<Worker>> workers;
+    };
+
+    /**
+    * \struct InstrumentEnvironment Builder.h
+    * Environment of an Instrument.
+    */
+    struct InstrumentEnvironment :
+        public Environment
+    {
+        bool shouldReceiveFrequency;
+        uint32_t frequencyReceiverID;
+        unsigned short frequencyPortNumber;
+    };
+
+    /**
+    * \class Builder Builder.h
+    * Abstract class representing an object that is able to build a set of worfklow
+    * items, packed together into an Environment.
+    */
+    template<class EnvironmentType>
     class Builder
     {
-        /**
-        * \struct WorkflowIsland Builder.h
-        * Isolated subset of a workflow, which is not connected to the real-time
-        * rendering pipeline yet, but will be connected to the whole workflow by the
-        * real-time thread.
-        */
-        struct WorkflowIsland
-        {
-            std::vector<std::shared_ptr<Stream>> streams;
-            std::vector<std::shared_ptr<Worker>> workers;
-        };
+    public:
 
-        /* We rely on the default constructor */
-        
         /**
-        * Builds and returns a WorkflowIsland for a Workflow to integrate. This
-        * method should be overriden in each sub-class to construct the appropriate
-        * WorkflowIsland.
+        * Builds and returns an Environment for a Workflow to integrate. This method
+        * should be overriden in each sub-class to construct the appropriate
+        * Environment.
         */
-        virtual std::shared_ptr<WorkflowIsland> build() = 0;
+        virtual std::shared_ptr<EnvironmentType> build() = 0;
     };
 
     /**
@@ -647,9 +731,11 @@ namespace ANGLECORE
     * succession of workers and streams, and it should not contain any feedback.
     */
     class AudioWorkflow :
-        public Workflow
+        public Workflow,
+        public VoiceAssigner
     {
     public:
+
         /** Builds the base structure of the AudioWorkflow (Exporter, Mixer...) */
         AudioWorkflow();
 
@@ -658,81 +744,22 @@ namespace ANGLECORE
         * Exporter. This method allocates memory, so it should never be called by
         * the real-time thread. Note that the method relies on the move semantics to
         * optimize its vector return.
+        * @param[in] connectionPlan The ConnectionPlan that will be executed next,
+        *   and that should therefore taken into account in the computation
         */
         std::vector<std::shared_ptr<Worker>> buildRenderingSequence(const ConnectionPlan& connectionPlan) const;
+
+        /**
+        * Set the Exporter's memory location to write into when exporting.
+        * @param[in] buffer The new memory location.
+        * @param[in] numChannels Number of output channels.
+        * @param[in] startSample Position to start from in the buffer.
+        */
+        void setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample);
 
     private:
         std::shared_ptr<Exporter<float>> m_exporter;
         std::shared_ptr<Mixer> m_mixer;
-    };
-
-
-
-    /*
-    =================================================
-    VoiceAssigner
-    =================================================
-    */
-
-    /**
-    * \struct VoiceAssignment VoiceAssigner.h
-    * Represents an item in a voice sequence.
-    */
-    struct VoiceAssignment
-    {
-        bool isNull;
-        unsigned short voiceNumber;
-
-        VoiceAssignment(bool isNull, unsigned short voiceNumber);
-    };
-
-    /**
-    * \class VoiceAssigner VoiceAssigner.h
-    * Entity that assigns workers to voices, and keep track of its assingments
-    * internally.
-    */
-    class VoiceAssigner
-    {
-    public:
-
-        /**
-        * Maps a Worker to a Voice, so that the Worker will only be called if the
-        * Voice is on at runtime. If a Worker is not part of any Voice, it will be
-        * considered global, and will always be rendered. Note that the
-        * \p voiceNumber is expected to be in-range. No safety checks will be
-        * performed, mostly to increase speed.
-        * @param[in] voiceNumber Unique number that identifies the Voice \p worker
-        *   should be mapped to
-        * @param[in] workerID ID of the Worker to map
-        */
-        void assignVoiceToWorker(unsigned short voiceNumber, uint32_t workerID);
-
-        /**
-        * Revokes every assignment the given Worker was related to. If the Worker
-        * was not assigned a Voice, this method will simply return without any side
-        * effect.
-        * @param[in] workerID ID of the Worker to unmap
-        */
-        void revokeAssignments(uint32_t workerID);
-
-        /**
-        * Returns the voices assigned to each Worker in the \p workers vector. The
-        * vector returned will be of the same size as the input vector. If a Worker
-        * was not assigned any Voice, its corresponding VoiceAssignment will be
-        * null. Note that this method relies on move semantics for efficiency.
-        * @param[in] workers Vector of workers to retrieve the assigned voices from.
-        *   The vector should not contain any null pointer, and should preferably be
-        *   the rendering sequence of an AudioWorkflow.
-        */
-        std::vector<VoiceAssignment> getVoiceAssignments(const std::vector<std::shared_ptr<Worker>>& workers) const;
-
-    private:
-
-        /**
-        * Maps a Worker to its assigned Voice, if relevant. Workers are referred to
-        * with their ID, and voices with their number.
-        */
-        std::unordered_map<uint32_t, unsigned short> m_voiceAssignments;
     };
 
 

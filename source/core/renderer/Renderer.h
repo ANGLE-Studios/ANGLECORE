@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "../audioworkflow/workflow/Workflow.h"
-#include "../voiceassigner/VoiceAssigner.h"
+#include "../audioworkflow/voiceassigner/VoiceAssigner.h"
 #include "../../config/RenderingConfig.h"
 #include "../../dependencies/farbot/fifo.h"
 #include "../requests/ConnectionRequest.h"

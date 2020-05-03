@@ -27,6 +27,7 @@
 #include <unordered_map>
 
 #include "workflow/Workflow.h"
+#include "voiceassigner/VoiceAssigner.h"
 #include "Exporter.h"
 #include "Mixer.h"
 
@@ -38,9 +39,11 @@ namespace ANGLECORE
     * succession of workers and streams, and it should not contain any feedback.
     */
     class AudioWorkflow :
-        public Workflow
+        public Workflow,
+        public VoiceAssigner
     {
     public:
+
         /** Builds the base structure of the AudioWorkflow (Exporter, Mixer...) */
         AudioWorkflow();
 
@@ -53,6 +56,14 @@ namespace ANGLECORE
         *   and that should therefore taken into account in the computation
         */
         std::vector<std::shared_ptr<Worker>> buildRenderingSequence(const ConnectionPlan& connectionPlan) const;
+
+        /**
+        * Set the Exporter's memory location to write into when exporting.
+        * @param[in] buffer The new memory location.
+        * @param[in] numChannels Number of output channels.
+        * @param[in] startSample Position to start from in the buffer.
+        */
+        void setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample);
 
     private:
         std::shared_ptr<Exporter<float>> m_exporter;

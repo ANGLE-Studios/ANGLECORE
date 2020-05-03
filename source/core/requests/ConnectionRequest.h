@@ -29,7 +29,7 @@
 
 #include "../audioworkflow/workflow/ConnectionPlan.h"
 #include "../audioworkflow/workflow/Worker.h"
-#include "../voiceassigner/VoiceAssigner.h"
+#include "../audioworkflow/voiceassigner/VoiceAssigner.h"
 
 namespace ANGLECORE
 {
