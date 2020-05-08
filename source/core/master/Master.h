@@ -23,6 +23,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <chrono>
 
@@ -79,6 +80,7 @@ namespace ANGLECORE
 
     private:
         AudioWorkflow m_workflow;
+        std::mutex m_workflowLock;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
     };
@@ -86,6 +88,8 @@ namespace ANGLECORE
     template<class InstrumentType>
     bool Master::addInstrument()
     {
+        std::lock_guard<std::mutex> scopedLock(m_workflowLock);
+
         std::shared_ptr<ConnectionRequest> request = std::make_shared<ConnectionRequest>();
 
         ConnectionPlan& plan = request->plan;
@@ -172,8 +176,10 @@ namespace ANGLECORE
         * it can be safely destroyed by the non real-time thread that created it.
         */
 
-        /* We copy the ConnectionRequest and post the copy: */
+        /* We copy the ConnectionRequest... */
         std::shared_ptr<ConnectionRequest> requestCopy = request;
+
+        /* ... And post the copy:*/
         m_renderer.postConnectionRequest(requestCopy);
 
         /*
@@ -182,20 +188,37 @@ namespace ANGLECORE
         * 'hasBeenSuccessfullyProcessed'. We will still use the reference count of
         * the shared pointer as an indicator of when the real-time thread is done
         * with the request (although it is not guaranteed to be safe by the
-        * standard).
+        * standard). As long as that number is greater than 1 (and, normally, equal
+        * to 2), the real-time thread is still in possession of the copy, and
+        * possibly processing it. So the non real-time thread should wait. When this
+        * number reaches one, it means the real-time thread is done with the request
+        * and the non real-time thread can safely delete it. 
         */
 
         /*
-        * While the copy has not be destroyed, there is only 2 pointers to the
-        * ConnectionRequest.
+        * To avoid infinite loops and therefore deadlocks while waiting for the
+        * real-time thread, we introduce a timeout, using a number of attempts.
         */
-        while (request.use_count() > 1)
+        const unsigned short timeoutAttempts = 20;
+        unsigned short attempt = 0;
+
+        /*
+        * We then wait for the real-time thread to finish, or for the timeout to
+        * arise.
+        */
+        while (request.use_count() > 1 && attempt++ < timeoutAttempts)
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         /*
-        * Once here, the copy of the ConnectionRequest has been destroyed, and only
-        * the original remains, and can be safely deleted here by the non real-time
-        * thread.
+        * Once here, we either reached the timeout, or the copy of the
+        * ConnectionRequest has been destroyed, and only the original remains, and
+        * can be safely deleted. In any case, the original request will be deleted,
+        * so if the timeout is the reason for leaving the loop, then the copy will
+        * outlive the original in the real-time thread, which will trigger memory
+        * deallocation upon destruction, and possibly provoke an audio glitch (this
+        * should actually be very rare). If we left the loop because the copy was
+        * destroyed (which is the common case), then the original will be safely
+        * deleted here by the non real-time thread.
         */
 
         /*
