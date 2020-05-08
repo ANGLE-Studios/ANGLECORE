@@ -657,6 +657,8 @@ namespace ANGLECORE
         uint32_t m_startSample;
     };
 
+    #define ANGLECORE_NUM_VOICES 32
+
     /**
     * \class Mixer Mixer.h
     * Worker that sums all of its non-nullptr input stream, based on the audio
@@ -678,8 +680,47 @@ namespace ANGLECORE
         */
         void work(unsigned int numSamplesToWorkOn);
 
+        /**
+        * Instructs the Mixer to turn a Voice on, and to recompute its increments.
+        * This method is really fast, as it will only be called by the real-time
+        * thread.
+        * @param[in] voiceNumber Number identifying the Voice to turn on
+        */
+        void turnVoiceOn(unsigned short voiceNumber);
+
+        /**
+        * Instructs the Mixer to turn a Voice off, and to recompute its increments.
+        * This method is really fast, as it will only be called by the real-time
+        * thread.
+        * @param[in] voiceNumber Number identifying the Voice to turn on
+        */
+        void turnVoiceOff(unsigned short voiceNumber);
+
     private:
+
+        /**
+        * Recomputes the Mixer's increments after a Voice has been turned on or off.
+        * This method is really fast, as it will only be called by the real-time
+        * thread.
+        */
+        void updateIncrements();
+
         const unsigned short m_totalNumInstruments;
+
+        /**
+        * Voice to start from when mixing voices. This may vary depending on which
+        * Voice is on and off.
+        */
+        unsigned short m_start;
+
+        /**
+        * Jumps to perform between voices when mixing the audio output in order to
+        * avoid those that are off.
+        */
+        uint32_t m_increments[ANGLECORE_NUM_VOICES];
+
+        /** Tracks the on/off status of every Voice */
+        bool m_voiceIsOn[ANGLECORE_NUM_VOICES];
     };
 
     /**
@@ -780,8 +821,6 @@ namespace ANGLECORE
     Renderer
     =================================================
     */
-
-    #define ANGLECORE_NUM_VOICES 32
 
     namespace farbot
     {
