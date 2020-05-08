@@ -91,10 +91,9 @@ namespace ANGLECORE
         std::lock_guard<std::mutex> scopedLock(m_workflowLock);
 
         std::shared_ptr<ConnectionRequest> request = std::make_shared<ConnectionRequest>();
-
         ConnectionPlan& plan = request->plan;
 
-        for (unsigned short i = 0; i < ANGLECORE_NUM_VOICES; i++)
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
             /*
             * We create an Instrument of the given type, and then cast it to an
@@ -106,7 +105,7 @@ namespace ANGLECORE
             m_workflow.addWorker(instrument);
 
             /* ... And assigned to the current Voice. */
-            m_workflow.assignVoiceToWorker(i, instrument->id);
+            m_workflow.assignVoiceToWorker(v, instrument->id);
 
             /*
             * Then, we build its Environment, and add it to the Workflow, without
@@ -132,7 +131,7 @@ namespace ANGLECORE
                 for (auto& worker : environment->workers)
                 {
                     m_workflow.addWorker(worker);
-                    m_workflow.assignVoiceToWorker(i, worker->id);
+                    m_workflow.assignVoiceToWorker(v, worker->id);
                 }
 
                 // TO DO : Inoffensive connections
@@ -140,8 +139,8 @@ namespace ANGLECORE
 
             // TO DO : complete the plan
 
-            //for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
-            //    plan.workerToStreamPlugInstructions.emplace_back(ConnectionInstruction<WORKER_TO_STREAM, PLUG>())
+            // for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
+            //    plan.workerToStreamPlugInstructions.emplace_back(m_workflow.getMixerInputStreamID(v, 0, c), instrument->id, c);
         }
 
         /*
