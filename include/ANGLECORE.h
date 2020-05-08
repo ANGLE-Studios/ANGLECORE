@@ -757,6 +757,17 @@ namespace ANGLECORE
         */
         void setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample);
 
+        /**
+        * Retrieve the ID of the Mixer's input Stream at the provided location. Note
+        * that every parameter is expected to be in-range, and that no safety check
+        * will be performed by this method.
+        * @param[in] voiceNumber Voice whose workers ultimately fill in the Stream.
+        * @param[in] instrumentRackNumber Rack at the end of which the Stream is
+        *   located.
+        * @param[in] channel Audio channel that the Stream corresponds to.
+        */
+        uint32_t getMixerInputStreamID(unsigned short voiceNumber, unsigned short instrumentRackNumber, unsigned short channel) const;
+
     private:
         std::shared_ptr<Exporter<float>> m_exporter;
         std::shared_ptr<Mixer> m_mixer;
