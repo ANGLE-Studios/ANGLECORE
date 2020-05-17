@@ -22,10 +22,30 @@
 
 #pragma once
 
-/**********************************************************************
-** MEMORY
-**********************************************************************/
+/*
+* =====================================================================
+* PROCESSING
+* =====================================================================
+*/
+
+#define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. Should equal float or double. Note that one can still use double precision within an the Workers of an AudioWorkflow if this is set to float. */
+
+/*
+* =====================================================================
+* MEMORY
+* =====================================================================
+*/
 
 #define ANGLECORE_FIXED_STREAM_SIZE 256    /**< Fixed size to use for rendering (the rendering will be splitted into chunks of this size). */
 #define ANGLECORE_NUM_VOICES 32
 #define ANGLECORE_MIDIBUFFER_SIZE 2048     /**< Minimum number of MIDI messages the engine can handle without resizing. */
+
+
+
+/*
+* =====================================================================
+* SHORTHANDS
+* =====================================================================
+*/
+
+typedef ANGLECORE_PRECISION floating_type;

@@ -29,7 +29,7 @@ namespace ANGLECORE
     Stream::Stream() :
         WorkflowItem()
     {
-        data = new double[ANGLECORE_FIXED_STREAM_SIZE];
+        data = new floating_type[ANGLECORE_FIXED_STREAM_SIZE];
     }
 
     Stream::~Stream()
@@ -37,12 +37,12 @@ namespace ANGLECORE
         delete[] data;
     }
 
-    const double* const Stream::getDataForReading() const
+    const floating_type* Stream::getDataForReading() const
     {
         return data;
     }
 
-    double* const Stream::getDataForWriting()
+    floating_type* Stream::getDataForWriting()
     {
         return data;
     }

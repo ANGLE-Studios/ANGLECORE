@@ -40,7 +40,6 @@ namespace ANGLECORE
     =================================================
     */
 
-
     /**
     * \struct WorkflowItem WorkflowItem.h
     * Item of a workflow, with a unique ID.
@@ -69,6 +68,9 @@ namespace ANGLECORE
         static uint32_t nextId;
     };
 
+    #define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. Should equal float or double. Note that one can still use double precision within an the Workers of an AudioWorkflow if this is set to float. */
+    typedef ANGLECORE_PRECISION floating_type;
+
     /**
     * \class Stream Stream.h
     * Owner of a data stream used in the rendering process. The class implements
@@ -95,15 +97,15 @@ namespace ANGLECORE
         ~Stream();
 
         /** Provides a read access to the internal buffer. */
-        const double* const getDataForReading() const;
+        const floating_type* getDataForReading() const;
 
         /** Provides a write access to the internal buffer. */
-        double* const getDataForWriting();
+        floating_type* getDataForWriting();
 
     private:
 
         /** Internal buffer */
-        double* data;
+        floating_type* data;
     };
 
     /**
@@ -174,13 +176,13 @@ namespace ANGLECORE
         * Provides a read-only access to the Stream at \p index in the input bus.
         * @param[in] index Index of the stream within the input bus.
         */
-        const double* const getInputStream(unsigned short index) const;
+        const floating_type* getInputStream(unsigned short index) const;
 
         /**
         * Provides a write access to the Stream at \p index in the output bus.
         * @param[in] index Index of the stream within the output bus.
         */
-        double* getOutputStream(unsigned short index) const;
+        floating_type* getOutputStream(unsigned short index) const;
 
         /**
         * Returns a vector containing all the input streams the worker is connected

@@ -87,7 +87,7 @@ namespace ANGLECORE
         m_outputBus[outputPortNumber] = nullptr;
     }
 
-    const double* const Worker::getInputStream(unsigned short index) const
+    const floating_type* Worker::getInputStream(unsigned short index) const
     {
         /* If no input stream is connected, we return a null pointer */
         if (!m_inputBus[index])
@@ -97,7 +97,7 @@ namespace ANGLECORE
         return m_inputBus[index]->getDataForReading();
     }
 
-    double* Worker::getOutputStream(unsigned short index) const
+    floating_type* Worker::getOutputStream(unsigned short index) const
     {
         /* If no output stream is connected, we return a null pointer */
         if (!m_outputBus[index])

@@ -98,13 +98,13 @@ namespace ANGLECORE
         * Provides a read-only access to the Stream at \p index in the input bus.
         * @param[in] index Index of the stream within the input bus.
         */
-        const double* const getInputStream(unsigned short index) const;
+        const floating_type* getInputStream(unsigned short index) const;
 
         /**
         * Provides a write access to the Stream at \p index in the output bus.
         * @param[in] index Index of the stream within the output bus.
         */
-        double* getOutputStream(unsigned short index) const;
+        floating_type* getOutputStream(unsigned short index) const;
 
         /**
         * Returns a vector containing all the input streams the worker is connected

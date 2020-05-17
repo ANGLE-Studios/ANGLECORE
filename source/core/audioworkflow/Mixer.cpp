@@ -44,7 +44,7 @@ namespace ANGLECORE
 
         for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
         {
-            double* output = getOutputStream(c);
+            floating_type* output = getOutputStream(c);
 
             /*
             * The output bus is supposed to be already connected to existing streams
@@ -67,7 +67,7 @@ namespace ANGLECORE
                     */
                     unsigned short inputPortNumber = v * ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE * ANGLECORE_NUM_CHANNELS + i * ANGLECORE_NUM_CHANNELS + c;
 
-                    const double* input = getInputStream(inputPortNumber);
+                    const floating_type* input = getInputStream(inputPortNumber);
 
                     /*
                     * Just like the output bus, the input bus is supposed to be
