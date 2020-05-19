@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "../../../utility/StringView.h"
 #include "../../../config/RenderingConfig.h"
 
@@ -48,19 +50,21 @@ namespace ANGLECORE
         };
 
         const StringView identifier;
-        const SmoothingMethod smoothingMethod;
-        const bool minimalSmoothingEnabled;
         const floating_type defaultValue;
         const floating_type minimalValue;
         const floating_type maximalValue;
+        const SmoothingMethod smoothingMethod;
+        const bool minimalSmoothingEnabled;
+        const uint32_t minimalSmoothingDurationInSamples;
 
-        Parameter(const char* identifier, SmoothingMethod smoothingMethod, bool minimalSmoothingEnabled, floating_type defaultValue, floating_type minimalValue, floating_type maximalValue) :
+        Parameter(const char* identifier, floating_type defaultValue, floating_type minimalValue, floating_type maximalValue, SmoothingMethod smoothingMethod, bool minimalSmoothingEnabled, uint32_t minimalSmoothingDurationInSamples) :
             identifier(identifier),
-            smoothingMethod(smoothingMethod),
-            minimalSmoothingEnabled(minimalSmoothingEnabled),
             defaultValue(defaultValue),
             minimalValue(minimalValue),
-            maximalValue(maximalValue)
+            maximalValue(maximalValue),
+            smoothingMethod(smoothingMethod),
+            minimalSmoothingEnabled(minimalSmoothingEnabled),
+            minimalSmoothingDurationInSamples(minimalSmoothingDurationInSamples)
         {}
     };
 }

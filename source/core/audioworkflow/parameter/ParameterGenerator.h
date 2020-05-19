@@ -32,14 +32,40 @@
 
 namespace ANGLECORE
 {
+    /**
+    * \class ParameterGenerator ParameterGenerator.h
+    * Worker that generates the values of a Parameter in a Stream, according to the
+    * end-user requests. A ParameterGenerator also takes care of smoothing out every
+    * sudden change to avoid audio glitches.
+    */
     class ParameterGenerator :
         public Worker
     {
     public:
+
+        /**
+        * Creates a ParameterGenerator from the given Parameter.
+        * @param[in] parameter Parameter containing all the necessary information
+        *   for the ParameterGenerator to generate its value.
+        */
         ParameterGenerator(const Parameter& parameter);
 
+        /**
+        * Pushes the given request into the request queue. This method uses move
+        * semantics, so it will take ownership of the pointer passed as argument. It
+        * will never be called by the real-time thread, and will only be called by
+        * the non real-time thread upon user request.
+        * @param[in] request The ParameterChangeRequest to post to the
+        *   ParameterGenerator. It will not be processed immediately, but before
+        *   rendering the next audio block.
+        */
         void postParameterChangeRequest(std::shared_ptr<ParameterChangeRequest>&& request);
 
+        /**
+        * Generates the successive values of the associated Parameter for the next
+        * rendering session.
+        * @param[in] numSamplesToWorkOn Number of samples to generate.
+        */
         void work(unsigned int numSamplesToWorkOn);
 
     private:
@@ -65,9 +91,10 @@ namespace ANGLECORE
         */
         enum State
         {
-            STEADY = 0,     /**< The Parameter has a constant value */
-            TRANSIENT,      /**< The Parameter is currently changing its value */
-            NUM_STATES      /**< Counts the number of possible states */
+            STEADY = 0,             /**< The Parameter has a constant value, and the output stream is entierly filled with that value */
+            TRANSIENT,              /**< The Parameter is currently changing its value */
+            TRANSIENT_TO_STEADY,    /**< The Parameter has reached a new value but the output stream still needs to be filled up accordingly */
+            NUM_STATES              /**< Counts the number of possible states */
         };
 
         const Parameter& m_parameter;

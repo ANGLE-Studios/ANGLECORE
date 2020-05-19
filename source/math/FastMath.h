@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include "../config/RenderingConfig.h"
+
 namespace ANGLECORE
 {
     /**
@@ -42,7 +44,7 @@ namespace ANGLECORE
         *   should be close to zero, or at least remain between -0.5 and 0.5.
         */
         /* TODO: in C++14 and later, this could be made a constexpr. */
-        inline static double exp(double epsilon)
+        inline static floating_type exp(floating_type epsilon)
         {
             return 1.0 + epsilon + epsilon * epsilon * 0.5;
         }

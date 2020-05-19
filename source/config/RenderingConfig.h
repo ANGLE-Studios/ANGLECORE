@@ -44,8 +44,11 @@
 
 /*
 * =====================================================================
-* SHORTHANDS
+* TYPE SHORTHANDS
 * =====================================================================
 */
 
-typedef ANGLECORE_PRECISION floating_type;
+namespace ANGLECORE
+{
+    typedef ANGLECORE_PRECISION floating_type;
+}
