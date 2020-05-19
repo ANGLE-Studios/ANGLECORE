@@ -166,15 +166,25 @@ namespace ANGLECORE
                         }
                         break;
                     }
+
+                    /*
+                    * Finally, if we are performing a multiplicative transient which
+                    * starts on the value 0, then we need to change the parameter's
+                    * current value to ANGLECORE_EPSILON in order for the geometric
+                    * sequence to start and render properly.
+                    */
+                    if (m_parameter.smoothingMethod == Parameter::SmoothingMethod::MULTIPLICATIVE)
+                        m_currentValue = std::max(m_currentValue, ANGLECORE_EPSILON);
                 }
 
                 /*
                 * ... NO! The change should be instantaneous. Therefore, we need to
-                * enter the STEADY state.
+                * enter the TRANSIENT_TO_STEADY state, as if we had just completed
+                * an instantaneous transient.
                 */
                 else
                 {
-                    m_currentState = State::STEADY;
+                    m_currentState = State::TRANSIENT_TO_STEADY;
                     m_currentValue = targetValue;
                 }
             }
@@ -210,8 +220,6 @@ namespace ANGLECORE
         {
         case State::TRANSIENT:
 
-            output[0] = m_currentValue;
-
             {
                 /*
                 * To detect the case of an ending transient, we need to compute the
@@ -225,6 +233,8 @@ namespace ANGLECORE
                 switch (m_parameter.smoothingMethod)
                 {
                 case Parameter::SmoothingMethod::ADDITIVE:
+
+                    output[0] = m_currentValue + m_transientTracker.increment;
 
                     /* We need to check for an ending transient, which would use
                     * less than 'numSamplesToWorkOn' samples to terminate:
@@ -256,6 +266,8 @@ namespace ANGLECORE
                     break;
 
                 case Parameter::SmoothingMethod::MULTIPLICATIVE:
+
+                    output[0] = m_currentValue * m_transientTracker.increment;
 
                     /* We need to check for an ending transient, which would use
                     * less than 'numSamplesToWorkOn' samples to terminate:
@@ -293,12 +305,24 @@ namespace ANGLECORE
             */
             m_transientTracker.position += numSamplesToWorkOn;
 
-            /* Afterwards, we check for a potential transient end: */
+            /*
+            * Immediately afterwards, we check if the transient has just ended. If
+            * it did, then we set the final value of the parameter, and we change
+            * state. If it did not, then we simply update the parameter's current
+            * value, using the last value we sent in the output stream.
+            */
             if (m_transientTracker.position >= m_transientTracker.transientDurationInSamples)
             {
                 m_currentState = State::TRANSIENT_TO_STEADY;
                 m_currentValue = m_transientTracker.targetValue;
             }
+            else
+
+                /*
+                * The Master guarantee 'numSamplesToWorkOn' is strictly positive,
+                * so the following access is valid:
+                */
+                m_currentValue = output[numSamplesToWorkOn - 1];
 
             break;
 
