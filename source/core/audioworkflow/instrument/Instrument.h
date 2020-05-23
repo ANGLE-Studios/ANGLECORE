@@ -28,6 +28,29 @@
 namespace ANGLECORE
 {
     /**
+    * \struct InstrumentEnvironment Instrument.h
+    * Environment of an Instrument.
+    */
+    struct InstrumentEnvironment :
+        public Environment
+    {
+        bool receiveSampleRate;
+        ContextReceiver sampleRateReceiver;
+
+        bool receiveInverseSampleRate;
+        ContextReceiver inverseSampleRateReceiver;
+
+        bool receiveFrequency;
+        ContextReceiver frequencyReceiver;
+
+        bool receiveFrequencyOverSampleRate;
+        ContextReceiver frequencyOverSampleRateReceiver;
+
+        bool receiveVelocity;
+        ContextReceiver velocityReceiver;
+    };
+
+    /**
     * \class Instrument Instrument.h
     * Worker and Builder.
     */

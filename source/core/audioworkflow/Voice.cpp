@@ -20,24 +20,22 @@
 **
 **********************************************************************/
 
-#pragma once
+#include "Voice.h"
 
-/**********************************************************************
-** GENERAL AUDIO SETTINGS
-**********************************************************************/
-
-#define ANGLECORE_NUM_CHANNELS 2
-#define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
-#define ANGLECORE_MAX_SAMPLE_RATE 192000                /**< Maximum sample rate, in Hz */
-
-/**********************************************************************
-** AUDIO WORKFLOW
-**********************************************************************/
-
-#define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
-
-/**********************************************************************
-** INSTRUMENT
-**********************************************************************/
-
-#define ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION 0.005   /**< Minimum duration to change the parameter of an instrument, in seconds */
+namespace ANGLECORE
+{
+    Voice::Voice() :
+        isFree(true),
+        isOn(false)
+    {
+        /*
+        * The racks are all empty by default, so they should not contain any
+        * instrument.
+        */
+        for (unsigned short r = 0; r < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; r++)
+        {
+            racks[r].isEmpty = true;
+            racks[r].instrument = nullptr;
+        }
+    }
+}

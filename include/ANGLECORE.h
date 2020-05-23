@@ -32,6 +32,9 @@
 #include <array>
 #include <cstring>
 #include <functional>
+#include <mutex>
+#include <chrono>
+#include <utility>
 
 namespace ANGLECORE
 {
@@ -1190,6 +1193,59 @@ namespace ANGLECORE
     };
 
     /**
+    * \struct GlobalContext GlobalContext.h
+    * Set of streams and workers designed to provide useful information, such as the
+    * sample rate the audio should be rendered into, in a centralized spot, shared
+    * by the rest of the AudioWorkflow. Note that Workers and streams are not
+    * connected upon creation: it is the responsability of the AudioWorkflow they
+    * will belong to to make the appropriate connections.
+    */
+    struct GlobalContext
+    {
+        /**
+        * \class SampleRateInverter GlobalContext.h
+        * Worker that simply computes the sample-wise reciprocal of a Stream.
+        */
+        class SampleRateInverter :
+            public Worker
+        {
+        public:
+
+            /**
+            * Creates a SampleRateInverter, which is a Worker with one input and one
+            * output.
+            */
+            SampleRateInverter();
+
+            /**
+            * Computes the sample-wise reciprocal of a Stream if, and only if, a new
+            * value is detected in the input Stream. Note that the computation is
+            * done over the entire Stream, regardless of \p numSamplesToWorkOn, for
+            * later use by other items from the AudioWorkflow.
+            * @param[in] numSamplesToWorkOn This parameter will be ignored.
+            */
+            void work(unsigned int numSamplesToWorkOn);
+
+        private:
+            floating_type m_oldSampleRate;
+        };
+
+        Parameter sampleRate;
+        std::shared_ptr<ParameterGenerator> sampleRateGenerator;
+        std::shared_ptr<Stream> sampleRateStream;
+        std::shared_ptr<SampleRateInverter> sampleRateInverter;
+        std::shared_ptr<Stream> sampleRateReciprocalStream;
+
+        /**
+        * Creates a GlobalContext, hereby initializing every pointer to a Stream or
+        * a Worker to a non null pointer. Note that this method does not do any
+        * connection between streams and workers, as this is the responsability of
+        * the AudioWorkflow to which the GlobalContext belong.
+        */
+        GlobalContext();
+    };
+
+    /**
     * \struct Environment Builder.h
     * Collection of workflow items built by a Builder. All the elements from an
     * Environment are isolated from the real-time rendering pipeline at first, and
@@ -1200,18 +1256,17 @@ namespace ANGLECORE
     {
         std::vector<std::shared_ptr<Stream>> streams;
         std::vector<std::shared_ptr<Worker>> workers;
-    };
 
-    /**
-    * \struct InstrumentEnvironment Builder.h
-    * Environment of an Instrument.
-    */
-    struct InstrumentEnvironment :
-        public Environment
-    {
-        bool shouldReceiveFrequency;
-        uint32_t frequencyReceiverID;
-        unsigned short frequencyPortNumber;
+        /**
+        * \struct ContextReceiver Builder.h
+        * Worker inside of an Environment that will be connected to the outstide
+        * workflow by the real-time thread.
+        */
+        struct ContextReceiver
+        {
+            uint32_t id;
+            unsigned short portNumber;
+        };
     };
 
     /**
@@ -1230,6 +1285,144 @@ namespace ANGLECORE
         * Environment.
         */
         virtual std::shared_ptr<EnvironmentType> build() = 0;
+    };
+
+    /**
+    * \struct InstrumentEnvironment Instrument.h
+    * Environment of an Instrument.
+    */
+    struct InstrumentEnvironment :
+        public Environment
+    {
+        bool receiveSampleRate;
+        ContextReceiver sampleRateReceiver;
+
+        bool receiveInverseSampleRate;
+        ContextReceiver inverseSampleRateReceiver;
+
+        bool receiveFrequency;
+        ContextReceiver frequencyReceiver;
+
+        bool receiveFrequencyOverSampleRate;
+        ContextReceiver frequencyOverSampleRateReceiver;
+
+        bool receiveVelocity;
+        ContextReceiver velocityReceiver;
+    };
+
+    /**
+    * \class Instrument Instrument.h
+    * Worker and Builder.
+    */
+    class Instrument :
+        public Worker,
+        public Builder<InstrumentEnvironment>
+    {
+    public:
+
+        /**
+        * Creates an Instrument.
+        */
+        Instrument(unsigned short numParameters);
+    };
+
+    /**
+    * \struct VoiceContext VoiceContext.h
+    * Set of streams and workers designed to provide useful information, such as the
+    * frequency the instruments of Each voice should play, in a centralized spot.
+    * Note that Workers and streams are not connected upon creation: it is the
+    * responsability of the AudioWorkflow they will belong to to make the
+    * appropriate connections.
+    */
+    struct VoiceContext
+    {
+        /**
+        * \class Divider GlobalContext.h
+        * Worker that simply computes the sample-wise division of its two input
+        * streams.
+        */
+        class Divider :
+            public Worker
+        {
+        public:
+
+            enum Input
+            {
+                FREQUENCY = 0,
+                SAMPLE_RATE,
+                NUM_INPUTS  /**< This will equal two, as a Divider must have exactly
+                            * two inputs */
+            };
+
+            /**
+            * Creates a Divider, which is a Worker with two inputs and one
+            * output.
+            */
+            Divider();
+
+            /**
+            * Computes the sample-wise division of the two input streams. Note that
+            * the computation is done over the entire Stream, regardless of \p
+            * numSamplesToWorkOn, for later use by other items from the Voice.
+            * @param[in] numSamplesToWorkOn This parameter will be ignored.
+            */
+            void work(unsigned int numSamplesToWorkOn);
+        };
+
+        Parameter frequency;
+        std::shared_ptr<ParameterGenerator> frequencyGenerator;
+        std::shared_ptr<Stream> frequencyStream;
+        std::shared_ptr<Divider> divider;
+        std::shared_ptr<Stream> frequencyOverSampleRateStream;
+
+        Parameter velocity;
+        std::shared_ptr<Stream> velocityStream;
+
+        /**
+        * Creates a VoiceContext, hereby initializing every pointer to a Stream or a
+        * Worker to a non null pointer. Note that this method does not do any
+        * connection between streams and workers, as this is the responsability of
+        * the AudioWorkflow to which the VoiceContext belong.
+        */
+        VoiceContext();
+    };
+
+    #define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
+
+    /**
+    * \struct Voice Voice.h
+    * Set of workers and streams, which together form an audio engine that can be
+    * used by the Master, the AudioWorkflow, and the Renderer to generate some audio
+    * according to what the user wants to play.
+    */
+    struct Voice
+    {
+        /**
+        * \struct Rack Voice.h
+        * Set of workers and streams which are specific to an Instrument, within a
+        * particular Voice.
+        */
+        struct Rack
+        {
+            bool isEmpty;
+            std::shared_ptr<Instrument> instrument;
+        };
+
+        bool isFree;
+        bool isOn;
+
+        /**
+        * Each Voice has its own context, called a VoiceContext. A VoiceContext is a
+        * set of streams and workers who send information about the frequency and
+        * velocity the Voice should use to play some sound.
+        */
+        VoiceContext voiceContext;
+        Rack racks[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
+
+        /**
+        * Creates a Voice only comprised of empty racks.
+        */
+        Voice();
     };
 
     /**
@@ -1265,19 +1458,82 @@ namespace ANGLECORE
         void setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample);
 
         /**
+        * Tries to find a Rack that is empty in all voices to insert an instrument
+        * inside. Returns a valid rack number corresponding to an empty rack if has
+        * found one, and an out-of-range number otherwise.
+        */
+        unsigned short findEmptyRackNumber() const;
+
+        /**
+        * Adds an Instrument to the given Voice, at the given \p rackNumber, then
+        * build the Instrument's Environment and plan its bridging to the real-time
+        * rendering pipeline by completing the given \p planToComplete. Note that
+        * every parameter is expected to be in-range and valid, and that no safety
+        * check will be performed by this method.
+        * @param[in] voiceNumber Voice to place the Instrument in.
+        * @param[in] rackNumber Rack to insert the Instrument into within the given
+        *   voice.
+        * @param[in] instrument The Instrument to insert. It should not be a null
+        *   pointer.
+        * @param[in] planToComplete The ConnectionPlan to complete with bridging
+        *   instructions.
+        */
+        void addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& planToComplete);
+
+    protected:
+
+        /**
         * Retrieve the ID of the Mixer's input Stream at the provided location. Note
         * that every parameter is expected to be in-range, and that no safety check
         * will be performed by this method.
         * @param[in] voiceNumber Voice whose workers ultimately fill in the Stream.
-        * @param[in] instrumentRackNumber Rack at the end of which the Stream is
-        *   located.
+        * @param[in] rackNumber Rack at the end of which the Stream is located.
         * @param[in] channel Audio channel that the Stream corresponds to.
         */
-        uint32_t getMixerInputStreamID(unsigned short voiceNumber, unsigned short instrumentRackNumber, unsigned short channel) const;
+        uint32_t getMixerInputStreamID(unsigned short voiceNumber, unsigned short rackNumber, unsigned short channel) const;
+
+        /**
+        * Retrieve the ID of the Stream containing the current sample rate in the
+        * AudioWorkflow's global context.
+        */
+        uint32_t getSampleRateStreamID() const;
+
+        /**
+        * Retrieve the ID of the Stream containing the inverse of the current sample
+        * rate in the AudioWorkflow's global context.
+        */
+        uint32_t getInverseSampleRateStreamID() const;
+
+        /**
+        * Retrieve the ID of the Stream containing the given Voice's current
+        * frequency. Note that voiceNumber is expected to be in-range, and that no
+        * safety check will be performed by this method.
+        * @param[in] voiceNumber Voice to retrieve the information from.
+        */
+        uint32_t getFrequencyStreamID(unsigned short voiceNumber) const;
+
+        /**
+        * Retrieve the ID of the Stream containing the given Voice's current
+        * frequency divided by the global sample rate. Note that voiceNumber is
+        * expected to be in-range, and that no safety check will be performed by
+        * this method.
+        * @param[in] voiceNumber Voice to retrieve the information from.
+        */
+        uint32_t getFrequencyOverSampleRateStreamID(unsigned short voiceNumber) const;
+
+        /**
+        * Retrieve the ID of the Stream containing the given Voice's current
+        * velocity. Note that voiceNumber is expected to be in-range, and that no
+        * safety check will be performed by this method.
+        * @param[in] voiceNumber Voice to retrieve the information from.
+        */
+        uint32_t getVelocityStreamID(unsigned short voiceNumber) const;
 
     private:
         std::shared_ptr<Exporter<float>> m_exporter;
         std::shared_ptr<Mixer> m_mixer;
+        Voice m_voices[ANGLECORE_NUM_VOICES];
+        GlobalContext m_globalContext;
     };
 
 
@@ -1533,6 +1789,185 @@ namespace ANGLECORE
         std::vector<MIDIMessage> m_messages;
         uint32_t m_numMessages;
     };
+
+    /**
+    * \class Master Master.h
+    * Agent that orchestrates the rendering and the interaction with the end-user
+    * requests. It should be the only entry point from outside when developping an
+    * ANGLECORE-based application.
+    */
+    class Master
+    {
+    public:
+        Master();
+
+        /**
+        * Clears the Master's internal MIDIBuffer to prepare for rendering the next
+        * audio block.
+        */
+        void clearMIDIBufferForNextAudioBlock();
+
+        /**
+        * Adds a new MIDIMessage at the end of the Master's internal MIDIBuffer, and
+        * returns a reference to it.
+        */
+        MIDIMessage& pushBackNewMIDIMessage();
+
+        /**
+        * Renders the next audio block, using the internal MIDIBuffer as a source
+        * of MIDI messages, and the provided parameters for computing and exporting
+        * the output result.
+        * @param[in] audioBlockToGenerate The memory location that will be used to
+        *   output the audio data generated by the Renderer. This should correspond
+        *   to an audio buffer of at least \p numChannels audio channels and \p
+        *   numSamples audio samples.
+        * @param[in] numChannels The number of channels available at the memory
+        *   location \p audioBlockToGenerate. Note that ANGLECORE's engine may
+        *   generate more channels than this number, and eventually merge them all
+        *   to match that number.
+        * @param[in] numSamples The number of samples to generate and write into
+        *   \p audioBlockToGenerate.
+        */
+        void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
+
+        template<class InstrumentType>
+        bool addInstrument();
+
+    protected:
+
+        /** Processes the given MIDIMessage. */
+        void processMIDIMessage(const MIDIMessage& message);
+
+    private:
+        AudioWorkflow m_workflow;
+        std::mutex m_workflowLock;
+        Renderer m_renderer;
+        MIDIBuffer m_midiBuffer;
+    };
+
+    template<class InstrumentType>
+    bool Master::addInstrument()
+    {
+        std::lock_guard<std::mutex> scopedLock(m_workflowLock);
+
+        /* Can we insert a new instrument? We need to find an empty spot first */
+        unsigned short emptyRackNumber = m_workflow.findEmptyRackNumber();
+        if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+
+            /*
+            * There is no empty spot, so we stop here and return false. We cannot
+            * insert a new instrument to the workflow.
+            */
+            return false;
+
+        /*
+        * Otherwise, if we can insert a new instrument, then we need to prepare the
+        * instrument's environment, as well as a new ConnectionRequest for bridging
+        * the instrument with the real-time rendering pipeline.
+        */
+
+        std::shared_ptr<ConnectionRequest> request = std::make_shared<ConnectionRequest>();
+        ConnectionPlan& plan = request->plan;
+
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+        {
+            /*
+            * We create an Instrument of the given type, and then cast it to an
+            * Instrument, to ensure type validity.
+            */
+            std::shared_ptr<Instrument> instrument = std::make_shared<InstrumentType>();
+
+            /*
+            * Then, we insert the Instrument into the Workflow and plan its bridging
+            * to the real-time rendering pipeline.
+            */
+            m_workflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
+        }
+
+        /*
+        * Once here, we have a ConnectionPlan ready to be used in our
+        * ConnectionRequest. We now need to precompute the consequences of executing
+        * than plan and connecting all of the instruments to the AudioWorkflow's
+        * real-time rendering pipeline.
+        */
+
+        /*
+        * We first calculate the rendering sequence that will take effect right
+        * after the plan is executed.
+        */
+        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_workflow.buildRenderingSequence(plan);
+
+        /*
+        * And from that sequence, we can precompute and assign the rest of the
+        * request properties:
+        */
+        request->newRenderingSequence = newRenderingSequence;
+        request->newVoiceAssignments = m_workflow.getVoiceAssignments(newRenderingSequence);
+        request->oneIncrements.resize(newRenderingSequence.size(), 1);
+
+        /*
+        * Finally, we need to send the ConnectionRequest to the Renderer. To avoid
+        * any memory deallocation by the real-time thread after it is done with the
+        * request, we do not pass the request straight to the Renderer. Instead, we
+        * create a copy and send that copy to the latter. Therefore, when the
+        * Renderer is done with the request, it will only delete a copy of a shared
+        * pointer and decrement its reference count by one, signaling to the Master
+        * the request has been processed (and either succeeded or failed), and that
+        * it can be safely destroyed by the non real-time thread that created it.
+        */
+
+        /* We copy the ConnectionRequest... */
+        std::shared_ptr<ConnectionRequest> requestCopy = request;
+
+        /* ... And post the copy:*/
+        m_renderer.postConnectionRequest(std::move(requestCopy));
+
+        /*
+        * From now on, the ConnectionRequest is in the hands of the real-time
+        * thread. We cannot access any member of 'request' except the atomic boolean
+        * 'hasBeenSuccessfullyProcessed'. We will still use the reference count of
+        * the shared pointer as an indicator of when the real-time thread is done
+        * with the request (although it is not guaranteed to be safe by the
+        * standard). As long as that number is greater than 1 (and, normally, equal
+        * to 2), the real-time thread is still in possession of the copy, and
+        * possibly processing it. So the non real-time thread should wait. When this
+        * number reaches one, it means the real-time thread is done with the request
+        * and the non real-time thread can safely delete it.
+        */
+
+        /*
+        * To avoid infinite loops and therefore deadlocks while waiting for the
+        * real-time thread, we introduce a timeout, using a number of attempts.
+        */
+        const unsigned short timeoutAttempts = 20;
+        unsigned short attempt = 0;
+
+        /*
+        * We then wait for the real-time thread to finish, or for the timeout to
+        * arise.
+        */
+        while (request.use_count() > 1 && attempt++ < timeoutAttempts)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        /*
+        * Once here, we either reached the timeout, or the copy of the
+        * ConnectionRequest has been destroyed, and only the original remains, and
+        * can be safely deleted. In any case, the original request will be deleted,
+        * so if the timeout is the reason for leaving the loop, then the copy will
+        * outlive the original in the real-time thread, which will trigger memory
+        * deallocation upon destruction, and possibly provoke an audio glitch (this
+        * should actually be very rare). If we left the loop because the copy was
+        * destroyed (which is the common case), then the original will be safely
+        * deleted here by the non real-time thread.
+        */
+
+        /*
+        * We access the 'hasBeenSuccessfullyProcessed' variable that may have been
+        * edited by the real-time thread, in order to determine whether or not the
+        * request was been successfully processed.
+        */
+        return request->hasBeenSuccessfullyProcessed.load();
+    }
 }
 
 

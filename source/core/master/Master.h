@@ -26,6 +26,7 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+#include <utility>
 
 #include "../audioworkflow/AudioWorkflow.h"
 #include "../renderer/Renderer.h"
@@ -36,6 +37,12 @@
 
 namespace ANGLECORE
 {
+    /**
+    * \class Master Master.h
+    * Agent that orchestrates the rendering and the interaction with the end-user
+    * requests. It should be the only entry point from outside when developping an
+    * ANGLECORE-based application.
+    */
     class Master
     {
     public:
@@ -90,6 +97,22 @@ namespace ANGLECORE
     {
         std::lock_guard<std::mutex> scopedLock(m_workflowLock);
 
+        /* Can we insert a new instrument? We need to find an empty spot first */
+        unsigned short emptyRackNumber = m_workflow.findEmptyRackNumber();
+        if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+
+            /*
+            * There is no empty spot, so we stop here and return false. We cannot
+            * insert a new instrument to the workflow.
+            */
+            return false;
+
+        /*
+        * Otherwise, if we can insert a new instrument, then we need to prepare the
+        * instrument's environment, as well as a new ConnectionRequest for bridging
+        * the instrument with the real-time rendering pipeline.
+        */
+
         std::shared_ptr<ConnectionRequest> request = std::make_shared<ConnectionRequest>();
         ConnectionPlan& plan = request->plan;
 
@@ -101,46 +124,11 @@ namespace ANGLECORE
             */
             std::shared_ptr<Instrument> instrument = std::make_shared<InstrumentType>();
 
-            /* The instrument is then added to the Workflow... */
-            m_workflow.addWorker(instrument);
-
-            /* ... And assigned to the current Voice. */
-            m_workflow.assignVoiceToWorker(v, instrument->id);
-
             /*
-            * Then, we build its Environment, and add it to the Workflow, without
-            * forgetting to assign each Worker from its Environment to the current
-            * Voice.
+            * Then, we insert the Instrument into the Workflow and plan its bridging
+            * to the real-time rendering pipeline.
             */
-            std::shared_ptr<InstrumentEnvironment> environment = instrument->build();
-
-            /*
-            * The Instrument may need no input and have no Environment, in which
-            * case the developper may have chosen to return a null pointer within
-            * the build() method. Therefore, we need to check if 'environment' is a
-            * null pointer here.
-            */
-            if (environment)
-            {
-                /*
-                * Note that the Workflow will check for a null pointer by itself, so
-                * there is no need to perform any safety check here.
-                */
-                for (auto& stream : environment->streams)
-                    m_workflow.addStream(sream);
-                for (auto& worker : environment->workers)
-                {
-                    m_workflow.addWorker(worker);
-                    m_workflow.assignVoiceToWorker(v, worker->id);
-                }
-
-                // TO DO : Inoffensive connections
-            }
-
-            // TO DO : complete the plan
-
-            // for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
-            //    plan.workerToStreamPlugInstructions.emplace_back(m_workflow.getMixerInputStreamID(v, 0, c), instrument->id, c);
+            m_workflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
         }
 
         /*
@@ -179,7 +167,7 @@ namespace ANGLECORE
         std::shared_ptr<ConnectionRequest> requestCopy = request;
 
         /* ... And post the copy:*/
-        m_renderer.postConnectionRequest(requestCopy);
+        m_renderer.postConnectionRequest(std::move(requestCopy));
 
         /*
         * From now on, the ConnectionRequest is in the hands of the real-time

@@ -42,18 +42,17 @@ namespace ANGLECORE
     {
         std::vector<std::shared_ptr<Stream>> streams;
         std::vector<std::shared_ptr<Worker>> workers;
-    };
 
-    /**
-    * \struct InstrumentEnvironment Builder.h
-    * Environment of an Instrument.
-    */
-    struct InstrumentEnvironment :
-        public Environment
-    {
-        bool shouldReceiveFrequency;
-        uint32_t frequencyReceiverID;
-        unsigned short frequencyPortNumber;
+        /**
+        * \struct ContextReceiver Builder.h
+        * Worker inside of an Environment that will be connected to the outstide
+        * workflow by the real-time thread.
+        */
+        struct ContextReceiver
+        {
+            uint32_t id;
+            unsigned short portNumber;
+        };
     };
 
     /**
