@@ -22,47 +22,102 @@
 
 #pragma once
 
+#include <vector>
+#include <unordered_map>
+
 #include "../workflow/Worker.h"
-#include "../Builder.h"
+#include "../parameter/Parameter.h"
+#include "../../../utility/StringView.h"
 
 namespace ANGLECORE
 {
     /**
-    * \struct InstrumentEnvironment Instrument.h
-    * Environment of an Instrument.
-    */
-    struct InstrumentEnvironment :
-        public Environment
-    {
-        bool receiveSampleRate;
-        ContextReceiver sampleRateReceiver;
-
-        bool receiveInverseSampleRate;
-        ContextReceiver inverseSampleRateReceiver;
-
-        bool receiveFrequency;
-        ContextReceiver frequencyReceiver;
-
-        bool receiveFrequencyOverSampleRate;
-        ContextReceiver frequencyOverSampleRateReceiver;
-
-        bool receiveVelocity;
-        ContextReceiver velocityReceiver;
-    };
-
-    /**
     * \class Instrument Instrument.h
-    * Worker and Builder.
+    * Worker that generates audio within an AudioWorkflow.
     */
     class Instrument :
-        public Worker,
-        public Builder<InstrumentEnvironment>
+        public Worker
     {
     public:
 
+        enum ContextParameter
+        {
+            SAMPLE_RATE = 0,
+            SAMPLE_RATE_RECIPROCAL,
+            FREQUENCY,
+            FREQUENCY_OVER_SAMPLE_RATE,
+            VELOCITY,
+            NUM_CONTEXT_PARAMETERS
+        };
+
         /**
-        * Creates an Instrument.
+        * \struct ContextConfiguration Instrument.h
+        * The ContextConfiguration describes whether or not an Instrument should be
+        * connected to a particular context within an AudioWorkflow. In defines how
+        * an Instrument interacts with its surrounding, and, for example, if it
+        * should capture and use the sample rate during its rendering.
         */
-        Instrument(unsigned short numParameters);
+        struct ContextConfiguration
+        {
+            bool receiveSampleRate;
+            bool receiveSampleRateReciprocal;
+            bool receiveFrequency;
+            bool receiveFrequencyOverSampleRate;
+            bool receiveVelocity;
+
+            /** Creates a ContextConfiguration from the given parameters */
+            ContextConfiguration(bool receiveSampleRate, bool receiveSampleRateReciprocal, bool receiveFrequency, bool receiveFrequencyOverSampleRate, bool receiveVelocity);
+        };
+
+        /**
+        * Creates an Instrument from a list of parameters, split between the context
+        * parameters, which are common to other instruments (such as the sample rate
+        * and the velocity), and the specific parameters that are unique for the
+        * Instrument. Note that the two vectors passed in as arguments will be
+        * copied inside the Instrument.
+        * @param[in] contextParameters Vector containing all the context parameters
+        *   the Instrument needs in order to work properly.
+        * @param[in] parameters Vector containing all the specific parameters the
+        *   Instrument needs to work properly, in addition to the context
+        *   parameters.
+        */
+        Instrument(const std::vector<ContextParameter>& contextParameters, const std::vector<Parameter>& parameters);
+
+        /**
+        * Returns the input port number where the given \p contextParameter should
+        * be plugged in.
+        * @param[in] contextParameter Context parameter to retrieve the input port
+        *   number from.
+        */
+        unsigned short getInputPortNumber(ContextParameter contextParameter) const;
+
+        /**
+        * Returns the input port number where the given Parameter, identified using
+        * its StringView identifier, should be plugged in.
+        * @param[in] parameterID String, submitted either as a StringView or a const
+        *   char*, which uniquely identifies the given Parameter.
+        */
+        unsigned short getInputPortNumber(const StringView& parameterID) const;
+
+        /**
+        * Returns the Instrument's ContextConfiguration, which specifies how the
+        * Instrument should be connected to the audio workflows' GlobalContext and
+        * VoiceContext in order to retrieve shared information, such as the sample
+        * rate or the velocity of each note.
+        */
+        const ContextConfiguration& getContextConfiguration() const;
+
+        /**
+        * Returns the Instrument's internal set of parameters, therefore excluding
+        * the context parameters which are all exogenous.
+        */
+        const std::vector<Parameter>& getParameters() const;
+
+    private:
+        const std::vector<ContextParameter> m_contextParameters;
+        const std::vector<Parameter> m_parameters;
+        const ContextConfiguration m_configuration;
+        std::unordered_map<ContextParameter, unsigned short> m_contextParameterInputPortNumbers;
+        std::unordered_map<StringView, unsigned short> m_parameterInputPortNumbers;
     };
 }

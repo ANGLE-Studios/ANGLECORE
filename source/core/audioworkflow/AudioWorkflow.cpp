@@ -97,12 +97,12 @@ namespace ANGLECORE
         */
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
-            const VoiceContext& voiceContext = m_voices[v].voiceContext;
+            VoiceContext& voiceContext = m_voices[v].voiceContext;
 
             /* We add the voice context's workers and streams */
             addWorker(voiceContext.frequencyGenerator);
             addStream(voiceContext.frequencyStream);
-            addWorker(voiceContext.divider);
+            addWorker(voiceContext.ratioCalculator);
             addStream(voiceContext.frequencyOverSampleRateStream);
 
             /*
@@ -111,7 +111,7 @@ namespace ANGLECORE
             * pointers are null, so we do not need to check for null pointers here:
             */
             assignVoiceToWorker(v, voiceContext.frequencyGenerator->id);
-            assignVoiceToWorker(v, voiceContext.divider->id);
+            assignVoiceToWorker(v, voiceContext.ratioCalculator->id);
 
             /*
             * Then we create the connections between the context's items. Again, for
@@ -119,9 +119,9 @@ namespace ANGLECORE
             * here:
             */
             plugWorkerIntoStream(voiceContext.frequencyGenerator->id, 0, voiceContext.frequencyStream->id);
-            plugStreamIntoWorker(voiceContext.frequencyStream->id, voiceContext.divider->id, VoiceContext::Divider::Input::FREQUENCY);
-            plugStreamIntoWorker(m_globalContext.sampleRateReciprocalStream->id, voiceContext.divider->id, VoiceContext::Divider::Input::SAMPLE_RATE);
-            plugWorkerIntoStream(voiceContext.divider->id, 0, voiceContext.frequencyOverSampleRateStream->id);
+            plugStreamIntoWorker(voiceContext.frequencyStream->id, voiceContext.ratioCalculator->id, VoiceContext::RatioCalculator::Input::FREQUENCY);
+            plugStreamIntoWorker(m_globalContext.sampleRateReciprocalStream->id, voiceContext.ratioCalculator->id, VoiceContext::RatioCalculator::Input::SAMPLE_RATE_RECIPROCAL);
+            plugWorkerIntoStream(voiceContext.ratioCalculator->id, 0, voiceContext.frequencyOverSampleRateStream->id);
         }
     }
 
@@ -179,41 +179,57 @@ namespace ANGLECORE
         assignVoiceToWorker(voiceNumber, instrument->id);
 
         /*
-        * Then, we build its Environment, and add it to the Workflow, without
-        * forgetting to assign each worker from its environment to the given voice.
+        * Then, we plan the connection of the instrument to the audio workflow's
+        * global and voice contexts, based on the instrument's internal
+        * configuration.
         */
-        std::shared_ptr<InstrumentEnvironment> environment = instrument->build();
+        const Instrument::ContextConfiguration& configuration = instrument->getContextConfiguration();
+        if (configuration.receiveSampleRate)
+            planToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateStreamID(), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::SAMPLE_RATE));
+        if (configuration.receiveSampleRateReciprocal)
+            planToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateReciprocalStreamID(), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::SAMPLE_RATE_RECIPROCAL));
+        if (configuration.receiveFrequency)
+            planToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::FREQUENCY));
+        if (configuration.receiveFrequencyOverSampleRate)
+            planToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyOverSampleRateStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::FREQUENCY_OVER_SAMPLE_RATE));
+        if (configuration.receiveVelocity)
+            planToComplete.streamToWorkerPlugInstructions.emplace_back(getVelocityStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::VELOCITY));
 
         /*
-        * The Instrument may need no input and have no Environment, in which case
-        * the developper may have chosen to return a null pointer within the build()
-        * method. Therefore, we need to check whether 'environment' is a null
-        * pointer or not here.
+        * After handling the interaction between the instrument and the workflow's
+        * contexts, now is the turn of the instrument's specific parameters to be
+        * configured. We loop through each parameter to create its specific, short
+        * rendering pipeline.
         */
-        if (environment)
+        for (const Parameter& parameter : instrument->getParameters())
         {
             /*
-            * Note that the AudioWorkflow will check for a null pointer by itself,
-            * so there is no need to perform any safety check here.
+            * For each parameter, we create a ParameterGenerator, that we assign to
+            * the instrument's voice:
             */
-            for (auto& stream : environment->streams)
-                addStream(stream);
-            for (auto& worker : environment->workers)
-            {
-                addWorker(worker);
-                assignVoiceToWorker(voiceNumber, worker->id);
-            }
+            std::shared_ptr<ParameterGenerator> generator = std::make_shared<ParameterGenerator>(parameter);
+            addWorker(generator);
+            assignVoiceToWorker(voiceNumber, generator->id);
 
-            if (environment->receiveSampleRate)
-                planToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateStreamID(), environment->sampleRateReceiver.id, environment->sampleRateReceiver.portNumber);
-            if (environment->receiveInverseSampleRate)
-                planToComplete.streamToWorkerPlugInstructions.emplace_back(getInverseSampleRateStreamID(), environment->inverseSampleRateReceiver.id, environment->inverseSampleRateReceiver.portNumber);
-            if (environment->receiveFrequency)
-                planToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyStreamID(voiceNumber), environment->frequencyReceiver.id, environment->frequencyReceiver.portNumber);
-            if (environment->receiveFrequencyOverSampleRate)
-                planToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyOverSampleRateStreamID(voiceNumber), environment->frequencyOverSampleRateReceiver.id, environment->frequencyOverSampleRateReceiver.portNumber);
-            if (environment->receiveVelocity)
-                planToComplete.streamToWorkerPlugInstructions.emplace_back(getVelocityStreamID(voiceNumber), environment->velocityReceiver.id, environment->velocityReceiver.portNumber);
+            /*
+            * Then we create a stream that will contain the output of the generator,
+            * i.e. the parameter's values:
+            */
+            std::shared_ptr<Stream> parameterStream = std::make_shared<Stream>();
+            addStream(parameterStream);
+
+            /*
+            * And finally, we connect those elements together with the instrument to
+            * construct a short rendering pipeline, which feeds in the instrument.
+            * Note that we make these connections directly here rather than planning
+            * them, as we know the parameter generator involved will only be called
+            * when the instrument is properly connected to the real-time rendering
+            * pipeline. Therefore, although the generator can almost already receive
+            * parameter change requests, it will not interfere with the current
+            * rendering pipeline.
+            */
+            plugWorkerIntoStream(generator->id, 0, parameterStream->id);
+            plugStreamIntoWorker(parameterStream->id, instrument->id, instrument->getInputPortNumber(parameter.identifier));
         }
 
         /*
@@ -248,7 +264,7 @@ namespace ANGLECORE
         return m_globalContext.sampleRateStream->id;
     }
 
-    uint32_t AudioWorkflow::getInverseSampleRateStreamID() const
+    uint32_t AudioWorkflow::getSampleRateReciprocalStreamID() const
     {
         /* The information is located in the GlobalContext */
         return m_globalContext.sampleRateReciprocalStream->id;

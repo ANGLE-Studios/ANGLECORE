@@ -40,11 +40,15 @@ namespace ANGLECORE
     struct VoiceContext
     {
         /**
-        * \class Divider GlobalContext.h
-        * Worker that simply computes the sample-wise division of its two input
-        * streams.
+        * \class RatioCalculator GlobalContext.h
+        * Worker that computes the sample-wise division of the Voice's frequency by
+        * the global sample rate. The RatioCalculator takes advantage of the fact
+        * that the reciprocal of the sample rate is already computed in the
+        * AudioWorkflow's GlobalContext, and therefore performs a multiplication
+        * rather than a division to compute the desired ratio, which leads to a
+        * shorter computation time.
         */
-        class Divider :
+        class RatioCalculator :
             public Worker
         {
         public:
@@ -52,16 +56,16 @@ namespace ANGLECORE
             enum Input
             {
                 FREQUENCY = 0,
-                SAMPLE_RATE,
-                NUM_INPUTS  /**< This will equal two, as a Divider must have exactly
-                            * two inputs */
+                SAMPLE_RATE_RECIPROCAL,
+                NUM_INPUTS  /**< This will equal two, as a RatioCalculator must have
+                            * exactly two inputs */
             };
 
             /**
-            * Creates a Divider, which is a Worker with two inputs and one
+            * Creates a RatioCalculator, which is a Worker with two inputs and one
             * output.
             */
-            Divider();
+            RatioCalculator();
 
             /**
             * Computes the sample-wise division of the two input streams. Note that
@@ -75,7 +79,7 @@ namespace ANGLECORE
         Parameter frequency;
         std::shared_ptr<ParameterGenerator> frequencyGenerator;
         std::shared_ptr<Stream> frequencyStream;
-        std::shared_ptr<Divider> divider;
+        std::shared_ptr<RatioCalculator> ratioCalculator;
         std::shared_ptr<Stream> frequencyOverSampleRateStream;
 
         Parameter velocity;

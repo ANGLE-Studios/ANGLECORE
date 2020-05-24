@@ -111,10 +111,10 @@ namespace ANGLECORE
         uint32_t getSampleRateStreamID() const;
 
         /**
-        * Retrieve the ID of the Stream containing the inverse of the current sample
-        * rate in the AudioWorkflow's global context.
+        * Retrieve the ID of the Stream containing the reciprocal of the current
+        * sample rate in the AudioWorkflow's global context.
         */
-        uint32_t getInverseSampleRateStreamID() const;
+        uint32_t getSampleRateReciprocalStreamID() const;
 
         /**
         * Retrieve the ID of the Stream containing the given Voice's current

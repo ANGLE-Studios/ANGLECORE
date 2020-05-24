@@ -33,22 +33,22 @@ namespace ANGLECORE
     /* Divider
     ***************************************************/
 
-    VoiceContext::Divider::Divider() :
+    VoiceContext::RatioCalculator::RatioCalculator() :
         Worker(Input::NUM_INPUTS, 1)
     {}
 
-    void VoiceContext::Divider::work(unsigned int /* numSamplesToWorkOn */)
+    void VoiceContext::RatioCalculator::work(unsigned int /* numSamplesToWorkOn */)
     {
-        const floating_type* frequencyInput = getInputStream(Input::FREQUENCY);
-        const floating_type* sampleRateInput = getInputStream(Input::SAMPLE_RATE);
+        /*
+        * To compute the division with better speed, we use the reciprocal of the
+        * sample rate which has already been computed for us, and compute a
+        * multiplication instead of a division:
+        */
+        const floating_type* frequency = getInputStream(Input::FREQUENCY);
+        const floating_type* sampleRateReciprocal = getInputStream(Input::SAMPLE_RATE_RECIPROCAL);
         floating_type* output = getOutputStream(0);
         for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
-
-            /*
-            * Note that the sample rate can never reach zero, so we do not need to
-            * check for a possible division by zero here.
-            */
-            output[i] = frequencyInput[i] / sampleRateInput[i];
+            output[i] = frequency[i] * sampleRateReciprocal[i];
     }
 
     /* VoiceContext
@@ -67,7 +67,7 @@ namespace ANGLECORE
     {
         frequencyGenerator = std::make_shared<ParameterGenerator>(frequency);
         frequencyStream = std::make_shared<Stream>();
-        divider = std::make_shared<Divider>();
+        ratioCalculator = std::make_shared<RatioCalculator>();
         frequencyOverSampleRateStream = std::make_shared<Stream>();
 
         velocityStream = std::make_shared<Stream>();

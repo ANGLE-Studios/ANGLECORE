@@ -40,6 +40,82 @@ namespace ANGLECORE
 {
     /*
     =================================================
+    Utility
+    =================================================
+    */
+
+    /**
+    * \struct StringView
+    * Provides a simplified version of the C++17 string_view feature for compiling
+    * with earlier versions of C++.
+    * A StringView is simply a view over an existing C string, which provides a
+    * simple interface for performing operations on that string.
+    * This structure only contains a pointer to a C string, but defines special
+    * comparison and hash operations which are applicable to that C string so that
+    * it can be properly used as a identifier inside an STL key-value container.
+    * Using a StringView instead of a std::string as a key type in such container
+    * will prevent undesired memory allocation and copies.
+    */
+    struct StringView
+    {
+        /**
+        * The constructor simply stores the provided pointer to C string internally.
+        * It hereby provides an implicit conversion from const char* to StringView.
+        */
+        StringView(const char* str) :
+            string_ptr(str)
+        {}
+
+        /**
+        * Comparing two StringViews consists in comparing their internal C strings,
+        * using strcmp.
+        */
+        bool operator==(const StringView& other) const
+        {
+            return strcmp(string_ptr, other.string_ptr) == 0;
+        }
+
+        /** This is the internal pointer to the C string being viewed */
+        const char* string_ptr;
+    };
+}
+
+
+
+/*
+=================================================
+General Utility
+=================================================
+*/
+
+namespace std {
+
+    /**
+    * In order to be used as a key within a standard key-value container, a StringView
+    * must have a dedicated hash function. Otherwise, only the internal pointer will be
+    * hashed, which will not produce the desired effect. Therefore, we have to
+    * specialize the standard hash structure to our StringView type.
+    */
+    template<>
+    struct hash<ANGLECORE::StringView>
+    {
+        size_t operator()(const ANGLECORE::StringView& view) const
+        {
+            /* This hash function comes from the boost library */
+            size_t hashValue = 0;
+            for (const char* p = view.string_ptr; p && *p; p++)
+                hashValue ^= *p + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
+            return hashValue;
+        }
+    };
+}
+
+
+
+namespace ANGLECORE
+{
+    /*
+    =================================================
     Dependencies
     =================================================
     */
@@ -322,49 +398,6 @@ namespace ANGLECORE
             std::size_t MAX_THREADS>
             bool fifo<T, consumer_concurrency, producer_concurrency, consumer_failure_mode, producer_failure_mode, MAX_THREADS>::pop(T& result) { return impl.pop(result); }
     }
-
-
-
-    /*
-    =================================================
-    Utility
-    =================================================
-    */
-
-    /**
-    * \struct StringView
-    * Provides a simplified version of the C++17 string_view feature for compiling
-    * with earlier versions of C++.
-    * A StringView is simply a view over an existing C string, which provides a
-    * simple interface for performing operations on that string.
-    * This structure only contains a pointer to a C string, but defines special
-    * comparison and hash operations which are applicable to that C string so that
-    * it can be properly used as a identifier inside an STL key-value container.
-    * Using a StringView instead of a std::string as a key type in such container
-    * will prevent undesired memory allocation and copies.
-    */
-    struct StringView
-    {
-        /**
-        * The constructor simply stores the provided pointer to C string internally.
-        * It hereby provides an implicit conversion from const char* to StringView.
-        */
-        StringView(const char* str) :
-            string_ptr(str)
-        {}
-
-        /**
-        * Comparing two StringViews consists in comparing their internal C strings,
-        * using strcmp.
-        */
-        bool operator==(const StringView& other) const
-        {
-            return strcmp(string_ptr, other.string_ptr) == 0;
-        }
-
-        /** This is the internal pointer to the C string being viewed */
-        const char* string_ptr;
-    };
 
 
 
@@ -1079,14 +1112,15 @@ namespace ANGLECORE
             NUM_METHODS     /**< Counts the number of available methods */
         };
 
-        const StringView identifier;
-        const floating_type defaultValue;
-        const floating_type minimalValue;
-        const floating_type maximalValue;
-        const SmoothingMethod smoothingMethod;
-        const bool minimalSmoothingEnabled;
-        const uint32_t minimalSmoothingDurationInSamples;
+        StringView identifier;
+        floating_type defaultValue;
+        floating_type minimalValue;
+        floating_type maximalValue;
+        SmoothingMethod smoothingMethod;
+        bool minimalSmoothingEnabled;
+        uint32_t minimalSmoothingDurationInSamples;
 
+        /** Creates a Parameter from the arguments provided */
         Parameter(const char* identifier, floating_type defaultValue, floating_type minimalValue, floating_type maximalValue, SmoothingMethod smoothingMethod, bool minimalSmoothingEnabled, uint32_t minimalSmoothingDurationInSamples) :
             identifier(identifier),
             defaultValue(defaultValue),
@@ -1246,84 +1280,93 @@ namespace ANGLECORE
     };
 
     /**
-    * \struct Environment Builder.h
-    * Collection of workflow items built by a Builder. All the elements from an
-    * Environment are isolated from the real-time rendering pipeline at first, and
-    * will be connected to the whole workflow by the real-time thread. This,
-    * however, does not prevent these items from being connected between themselves.
-    */
-    struct Environment
-    {
-        std::vector<std::shared_ptr<Stream>> streams;
-        std::vector<std::shared_ptr<Worker>> workers;
-
-        /**
-        * \struct ContextReceiver Builder.h
-        * Worker inside of an Environment that will be connected to the outstide
-        * workflow by the real-time thread.
-        */
-        struct ContextReceiver
-        {
-            uint32_t id;
-            unsigned short portNumber;
-        };
-    };
-
-    /**
-    * \class Builder Builder.h
-    * Abstract class representing an object that is able to build a set of worfklow
-    * items, packed together into an Environment.
-    */
-    template<class EnvironmentType>
-    class Builder
-    {
-    public:
-
-        /**
-        * Builds and returns an Environment for a Workflow to integrate. This method
-        * should be overriden in each sub-class to construct the appropriate
-        * Environment.
-        */
-        virtual std::shared_ptr<EnvironmentType> build() = 0;
-    };
-
-    /**
-    * \struct InstrumentEnvironment Instrument.h
-    * Environment of an Instrument.
-    */
-    struct InstrumentEnvironment :
-        public Environment
-    {
-        bool receiveSampleRate;
-        ContextReceiver sampleRateReceiver;
-
-        bool receiveInverseSampleRate;
-        ContextReceiver inverseSampleRateReceiver;
-
-        bool receiveFrequency;
-        ContextReceiver frequencyReceiver;
-
-        bool receiveFrequencyOverSampleRate;
-        ContextReceiver frequencyOverSampleRateReceiver;
-
-        bool receiveVelocity;
-        ContextReceiver velocityReceiver;
-    };
-
-    /**
     * \class Instrument Instrument.h
-    * Worker and Builder.
+    * Worker that generates audio within an AudioWorkflow.
     */
     class Instrument :
-        public Worker,
-        public Builder<InstrumentEnvironment>
+        public Worker
     {
     public:
 
+        enum ContextParameter
+        {
+            SAMPLE_RATE = 0,
+            SAMPLE_RATE_RECIPROCAL,
+            FREQUENCY,
+            FREQUENCY_OVER_SAMPLE_RATE,
+            VELOCITY,
+            NUM_CONTEXT_PARAMETERS
+        };
+
         /**
-        * Creates an Instrument.
+        * \struct ContextConfiguration Instrument.h
+        * The ContextConfiguration describes whether or not an Instrument should be
+        * connected to a particular context within an AudioWorkflow. In defines how
+        * an Instrument interacts with its surrounding, and, for example, if it
+        * should capture and use the sample rate during its rendering.
         */
-        Instrument(unsigned short numParameters);
+        struct ContextConfiguration
+        {
+            bool receiveSampleRate;
+            bool receiveSampleRateReciprocal;
+            bool receiveFrequency;
+            bool receiveFrequencyOverSampleRate;
+            bool receiveVelocity;
+
+            /** Creates a ContextConfiguration from the given parameters */
+            ContextConfiguration(bool receiveSampleRate, bool receiveSampleRateReciprocal, bool receiveFrequency, bool receiveFrequencyOverSampleRate, bool receiveVelocity);
+        };
+
+        /**
+        * Creates an Instrument from a list of parameters, split between the context
+        * parameters, which are common to other instruments (such as the sample rate
+        * and the velocity), and the specific parameters that are unique for the
+        * Instrument. Note that the two vectors passed in as arguments will be
+        * copied inside the Instrument.
+        * @param[in] contextParameters Vector containing all the context parameters
+        *   the Instrument needs in order to work properly.
+        * @param[in] parameters Vector containing all the specific parameters the
+        *   Instrument needs to work properly, in addition to the context
+        *   parameters.
+        */
+        Instrument(const std::vector<ContextParameter>& contextParameters, const std::vector<Parameter>& parameters);
+
+        /**
+        * Returns the input port number where the given \p contextParameter should
+        * be plugged in.
+        * @param[in] contextParameter Context parameter to retrieve the input port
+        *   number from.
+        */
+        unsigned short getInputPortNumber(ContextParameter contextParameter) const;
+
+        /**
+        * Returns the input port number where the given Parameter, identified using
+        * its StringView identifier, should be plugged in.
+        * @param[in] parameterID String, submitted either as a StringView or a const
+        *   char*, which uniquely identifies the given Parameter.
+        */
+        unsigned short getInputPortNumber(const StringView& parameterID) const;
+
+        /**
+        * Returns the Instrument's ContextConfiguration, which specifies how the
+        * Instrument should be connected to the audio workflows' GlobalContext and
+        * VoiceContext in order to retrieve shared information, such as the sample
+        * rate or the velocity of each note.
+        */
+        const ContextConfiguration& getContextConfiguration() const;
+
+        /**
+        * Returns the Instrument's internal set of parameters, therefore excluding
+        * the context parameters which are all exogenous.
+        */
+        const std::vector<Parameter>& getParameters() const;
+
+    private:
+        const std::vector<ContextParameter> m_contextParameters;
+        const std::vector<Parameter> m_parameters;
+        const ContextConfiguration m_configuration;
+        std::unordered_map<ContextParameter, unsigned short> m_contextParameterInputPortNumbers;
+        std::unordered_map<StringView, unsigned short> m_parameterInputPortNumbers;
     };
 
     /**
@@ -1337,11 +1380,15 @@ namespace ANGLECORE
     struct VoiceContext
     {
         /**
-        * \class Divider GlobalContext.h
-        * Worker that simply computes the sample-wise division of its two input
-        * streams.
+        * \class RatioCalculator GlobalContext.h
+        * Worker that computes the sample-wise division of the Voice's frequency by
+        * the global sample rate. The RatioCalculator takes advantage of the fact
+        * that the reciprocal of the sample rate is already computed in the
+        * AudioWorkflow's GlobalContext, and therefore performs a multiplication
+        * rather than a division to compute the desired ratio, which leads to a
+        * shorter computation time.
         */
-        class Divider :
+        class RatioCalculator :
             public Worker
         {
         public:
@@ -1349,16 +1396,16 @@ namespace ANGLECORE
             enum Input
             {
                 FREQUENCY = 0,
-                SAMPLE_RATE,
-                NUM_INPUTS  /**< This will equal two, as a Divider must have exactly
-                            * two inputs */
+                SAMPLE_RATE_RECIPROCAL,
+                NUM_INPUTS  /**< This will equal two, as a RatioCalculator must have
+                            * exactly two inputs */
             };
 
             /**
-            * Creates a Divider, which is a Worker with two inputs and one
+            * Creates a RatioCalculator, which is a Worker with two inputs and one
             * output.
             */
-            Divider();
+            RatioCalculator();
 
             /**
             * Computes the sample-wise division of the two input streams. Note that
@@ -1372,7 +1419,7 @@ namespace ANGLECORE
         Parameter frequency;
         std::shared_ptr<ParameterGenerator> frequencyGenerator;
         std::shared_ptr<Stream> frequencyStream;
-        std::shared_ptr<Divider> divider;
+        std::shared_ptr<RatioCalculator> ratioCalculator;
         std::shared_ptr<Stream> frequencyOverSampleRateStream;
 
         Parameter velocity;
@@ -1499,10 +1546,10 @@ namespace ANGLECORE
         uint32_t getSampleRateStreamID() const;
 
         /**
-        * Retrieve the ID of the Stream containing the inverse of the current sample
-        * rate in the AudioWorkflow's global context.
+        * Retrieve the ID of the Stream containing the reciprocal of the current
+        * sample rate in the AudioWorkflow's global context.
         */
-        uint32_t getInverseSampleRateStreamID() const;
+        uint32_t getSampleRateReciprocalStreamID() const;
 
         /**
         * Retrieve the ID of the Stream containing the given Voice's current
@@ -1968,34 +2015,4 @@ namespace ANGLECORE
         */
         return request->hasBeenSuccessfullyProcessed.load();
     }
-}
-
-
-
-/*
-=================================================
-General Utility
-=================================================
-*/
-
-namespace std {
-
-    /**
-    * In order to be used as a key within a standard key-value container, a StringView
-    * must have a dedicated hash function. Otherwise, only the internal pointer will be
-    * hashed, which will not produce the desired effect. Therefore, we have to
-    * specialize the standard hash structure to our StringView type.
-    */
-    template<>
-    struct hash<ANGLECORE::StringView>
-    {
-        size_t operator()(const ANGLECORE::StringView& view) const
-        {
-            /* This hash function comes from the boost library */
-            size_t hashValue = 0;
-            for (const char* p = view.string_ptr; p && *p; p++)
-                hashValue ^= *p + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
-            return hashValue;
-        }
-    };
 }

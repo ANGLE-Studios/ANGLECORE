@@ -49,14 +49,15 @@ namespace ANGLECORE
             NUM_METHODS     /**< Counts the number of available methods */
         };
 
-        const StringView identifier;
-        const floating_type defaultValue;
-        const floating_type minimalValue;
-        const floating_type maximalValue;
-        const SmoothingMethod smoothingMethod;
-        const bool minimalSmoothingEnabled;
-        const uint32_t minimalSmoothingDurationInSamples;
+        StringView identifier;
+        floating_type defaultValue;
+        floating_type minimalValue;
+        floating_type maximalValue;
+        SmoothingMethod smoothingMethod;
+        bool minimalSmoothingEnabled;
+        uint32_t minimalSmoothingDurationInSamples;
 
+        /** Creates a Parameter from the arguments provided */
         Parameter(const char* identifier, floating_type defaultValue, floating_type minimalValue, floating_type maximalValue, SmoothingMethod smoothingMethod, bool minimalSmoothingEnabled, uint32_t minimalSmoothingDurationInSamples) :
             identifier(identifier),
             defaultValue(defaultValue),
