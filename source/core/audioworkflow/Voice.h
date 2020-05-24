@@ -54,7 +54,7 @@ namespace ANGLECORE
 
         /**
         * Each Voice has its own context, called a VoiceContext. A VoiceContext is a
-        * set of streams and workers who send information about the frequency and
+        * set of streams and workers who sends information about the frequency and
         * velocity the Voice should use to play some sound.
         */
         VoiceContext voiceContext;
