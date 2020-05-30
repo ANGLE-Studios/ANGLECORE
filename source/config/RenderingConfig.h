@@ -28,7 +28,7 @@
 * =====================================================================
 */
 
-#define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. Should equal float or double. Note that one can still use double precision within an the Workers of an AudioWorkflow if this is set to float. */
+#define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. It should equal float or double. Note that one can still use double precision within the workers of an AudioWorkflow if this is set to float. */
 
 /*
 * =====================================================================

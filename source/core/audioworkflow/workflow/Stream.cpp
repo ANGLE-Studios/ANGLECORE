@@ -30,6 +30,10 @@ namespace ANGLECORE
         WorkflowItem()
     {
         data = new floating_type[ANGLECORE_FIXED_STREAM_SIZE];
+
+        /* We initialize a Stream by filling it with zeros */
+        for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
+            data[i] = static_cast<floating_type>(0.0);
     }
 
     Stream::~Stream()

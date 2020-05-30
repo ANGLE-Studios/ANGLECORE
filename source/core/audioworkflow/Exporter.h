@@ -72,20 +72,20 @@ namespace ANGLECORE
             */
 
             /*
-            * If the host request less channels than rendered, we sum their
+            * If the host requests less channels than rendered, we sum their
             * content using a modulo approach.
             */
             if (m_numOutputChannels < ANGLECORE_NUM_CHANNELS)
             {
                 /* We first clear the output buffer */
                 for (unsigned short c = 0; c < m_numOutputChannels; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i] = 0.0;
+                    for (uint32_t i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c][i + m_startSample] = 0.0;
 
                 /* And then we compute the sum into the output buffer */
                 for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+                    for (uint32_t i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c % m_numOutputChannels][i + m_startSample] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
             }
 
             /*

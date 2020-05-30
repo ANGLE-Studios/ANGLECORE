@@ -23,6 +23,7 @@
 #include "AudioWorkflow.h"
 
 #include "../../config/AudioConfig.h"
+#include "../../utility/MIDI.h"
 
 namespace ANGLECORE
 {
@@ -125,6 +126,16 @@ namespace ANGLECORE
         }
     }
 
+    void AudioWorkflow::setSampleRate(floating_type sampleRate)
+    {
+        m_globalContext.sampleRateGenerator->setParameterValue(sampleRate);
+    }
+
+    std::mutex& AudioWorkflow::getLock()
+    {
+        return m_lock;
+    }
+
     std::vector<std::shared_ptr<Worker>> AudioWorkflow::buildRenderingSequence(const ConnectionPlan& connectionPlan) const
     {
         std::vector<std::shared_ptr<Worker>> renderingSequence;
@@ -137,7 +148,7 @@ namespace ANGLECORE
         m_exporter->setOutputBuffer(buffer, numChannels, startSample);
     }
 
-    unsigned short AudioWorkflow::findEmptyRackNumber() const
+    unsigned short AudioWorkflow::findEmptyRack() const
     {
         /* We test every rack to see if it is empty in every voice */
         for (unsigned short r = 0; r < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; r++)
@@ -161,9 +172,9 @@ namespace ANGLECORE
         }
 
         /*
-        * If we arrive here, this means we could not find an empty spot, so we
+        * If we arrive here, this means we could not find any empty spot, so we
         * return the number of racks, which is an out-of-range index to the Voices'
-        * racks:
+        * racks that will signal the caller the research failed:
         */
         return ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE;
     }
@@ -238,6 +249,94 @@ namespace ANGLECORE
         */
         for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
             planToComplete.workerToStreamPlugInstructions.emplace_back(getMixerInputStreamID(voiceNumber, rackNumber, c), instrument->id, c);
+    }
+
+    unsigned short AudioWorkflow::findFreeVoice() const
+    {
+        /* We test every voice to see if it is free */
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+        {
+
+            /* If the current voice is free, we return its number: */
+            if (m_voices[v].isFree)
+                return v;
+        }
+
+        /*
+        * If we arrive here, this means we could not find any free voice, so we
+        * return the number of voices instead, which is an out-of-range index to the
+        * Voices' array that will signal the caller the research failed:
+        */
+        return ANGLECORE_NUM_VOICES;
+    }
+
+    void AudioWorkflow::turnVoiceOn(unsigned short voiceNumber)
+    {
+        /* We first turn on the given voice */
+        m_voices[voiceNumber].isOn = true;
+
+        /* And then send the information to the mixer */
+        m_mixer->turnVoiceOn(voiceNumber);
+    }
+
+    void AudioWorkflow::turnVoiceOffAndSetItFree(unsigned short voiceNumber)
+    {
+        /* We first turn off the given voice */
+        m_voices[voiceNumber].isOn = false;
+
+        /* And then send the information to the mixer */
+        m_mixer->turnVoiceOff(voiceNumber);
+
+        /* Afterwards, we set it free */
+        m_voices[voiceNumber].isFree = true;
+    }
+
+    bool AudioWorkflow::playsNoteNumber(unsigned short voiceNumber, unsigned char noteNumber) const
+    {
+        return m_voices[voiceNumber].currentNoteNumber == noteNumber;
+    }
+
+    void AudioWorkflow::takeVoiceAndPlayNote(unsigned short voiceNumber, unsigned char noteNumber, unsigned char noteVelocity)
+    {
+        /*
+        * We first retrieve the indicated voice, assuming the voiceNumber is
+        * in-range.
+        */
+        Voice& voice = m_voices[voiceNumber];
+
+        /* We take the voice: */
+        voice.isFree = false;
+
+        /*
+        * Then we send the note to voice, which includes sending the note number,
+        * the corresponding frequency, and the velocity.
+        */
+        voice.currentNoteNumber = noteNumber;
+        voice.voiceContext.frequencyGenerator->setParameterValue(MIDI::getFrequencyOf(noteNumber));
+
+        // TO DO: remove the "currentNoteVelocityAttribute" and fill the stream instead
+        voice.currentNoteVelocity = noteVelocity;
+
+        /*
+        * Finally, we reset every instrument located in the voice so that they get
+        * ready to play, and instruct them to effectively start playing.
+        */
+        for (unsigned short i = 0; i < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; i++)
+
+            /*
+            * Since the voice may not be full, we need to check if the instrument
+            * rack is empty before accessing the instrument. Note that the rack's
+            * 'isEmpty' member variable is meant for detecting an empty rack that
+            * can be overriden, which does not imply that the underlying instrument
+            * pointer is null. Conversely, we will not take for granted that the
+            * pointer is not null when the rack is tagged as 'non empty', so we
+            * perform a double check:
+            */
+            if (!voice.racks[i].isEmpty && voice.racks[i].instrument)
+            {
+                voice.racks[i].instrument->reset();
+                voice.racks[i].instrument->startPlaying();
+            }
     }
 
     uint32_t AudioWorkflow::getMixerInputStreamID(unsigned short voiceNumber, unsigned short instrumentRackNumber, unsigned short channel) const

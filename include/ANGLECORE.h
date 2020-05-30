@@ -435,7 +435,7 @@ namespace ANGLECORE
         static uint32_t nextId;
     };
 
-    #define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. Should equal float or double. Note that one can still use double precision within an the Workers of an AudioWorkflow if this is set to float. */
+    #define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. It should equal float or double. Note that one can still use double precision within the workers of an AudioWorkflow if this is set to float. */
     typedef ANGLECORE_PRECISION floating_type;
 
     /**
@@ -992,20 +992,20 @@ namespace ANGLECORE
             */
 
             /*
-            * If the host request less channels than rendered, we sum their
+            * If the host requests less channels than rendered, we sum their
             * content using a modulo approach.
             */
             if (m_numOutputChannels < ANGLECORE_NUM_CHANNELS)
             {
                 /* We first clear the output buffer */
                 for (unsigned short c = 0; c < m_numOutputChannels; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i] = 0.0;
+                    for (uint32_t i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c][i + m_startSample] = 0.0;
 
                 /* And then we compute the sum into the output buffer */
                 for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
+                    for (uint32_t i = 0; i < numSamplesToWorkOn; i++)
+                        m_outputBuffer[c % m_numOutputChannels][i + m_startSample] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
             }
 
             /*
@@ -1180,6 +1180,16 @@ namespace ANGLECORE
         * @param[in] numSamplesToWorkOn Number of samples to generate.
         */
         void work(unsigned int numSamplesToWorkOn);
+
+        /**
+        * Instructs the generator to change the parameter's value instantaneously,
+        * without any transient phase. This method must never be called by the non
+        * real-time thread, and should only be called by the real-time thread.
+        * Requests emitted by the non-real thread should use the
+        * postParameterChangeRequest() method instead.
+        * @param[in] newValue The new value of the Parameter.
+        */
+        void setParameterValue(floating_type newValue);
 
     private:
 
@@ -1361,6 +1371,25 @@ namespace ANGLECORE
         */
         const std::vector<Parameter>& getParameters() const;
 
+        /**
+        * Instructs the Instrument to reset itself, in order to be ready to play a
+        * new note. This method will always be called when the end-user requests to
+        * play a note, right before rendering. Subclasses of the Instrument class
+        * must override this method and define a convenient behavior during this
+        * reinitialization. For instance, instruments can use this opportunity to
+        * read the sample rate and update internal parameters if it has changed.
+        */
+        virtual void reset() = 0;
+
+        /**
+        * Instructs the Instrument to start playing. This method will always be
+        * called right after the reset() method. Subclasses of the Instrument class
+        * must override this method and define a convenient behavior during this
+        * initialization step. For instance, instruments can use this opportunity to
+        * change the state of an internal Envelope.
+        */
+        virtual void startPlaying() = 0;
+
     private:
         const std::vector<ContextParameter> m_contextParameters;
         const std::vector<Parameter> m_parameters;
@@ -1457,6 +1486,8 @@ namespace ANGLECORE
 
         bool isFree;
         bool isOn;
+        unsigned char currentNoteNumber;
+        unsigned char currentNoteVelocity;
 
         /**
         * Each Voice has its own context, called a VoiceContext. A VoiceContext is a
@@ -1487,6 +1518,20 @@ namespace ANGLECORE
         AudioWorkflow();
 
         /**
+        * Sets the sample rate of the AudioWorkflow.
+        * @param[in] sampleRate The value of the sample rate, in Hz.
+        */
+        void setSampleRate(floating_type sampleRate);
+
+        /**
+        * Returns the AudioWorkflow's internal mutex for handling concurrency
+        * issues. Note that the AudioWorkflow never locks itself: it is the
+        * responsability of the caller to lock the AudioWorkflow appropriately when
+        * consulting or modifying its content in a multi-threaded environment.
+        */
+        std::mutex& getLock();
+
+        /**
         * Builds and returns the Workflow's rendering sequence, starting from its
         * Exporter. This method allocates memory, so it should never be called by
         * the real-time thread. Note that the method relies on the move semantics to
@@ -1506,10 +1551,10 @@ namespace ANGLECORE
 
         /**
         * Tries to find a Rack that is empty in all voices to insert an instrument
-        * inside. Returns a valid rack number corresponding to an empty rack if has
-        * found one, and an out-of-range number otherwise.
+        * inside. Returns the valid rack number of an empty rack if has found one,
+        * and an out-of-range number otherwise.
         */
-        unsigned short findEmptyRackNumber() const;
+        unsigned short findEmptyRack() const;
 
         /**
         * Adds an Instrument to the given Voice, at the given \p rackNumber, then
@@ -1522,10 +1567,53 @@ namespace ANGLECORE
         *   voice.
         * @param[in] instrument The Instrument to insert. It should not be a null
         *   pointer.
-        * @param[in] planToComplete The ConnectionPlan to complete with bridging
+        * @param[out] planToComplete The ConnectionPlan to complete with bridging
         *   instructions.
         */
         void addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& planToComplete);
+
+        /**
+        * Tries to find a Voice that is free, i.e. not currently playing anything,
+        * in order to make it play some sound. Returns the valid voice number of an
+        * empty voice if has found one, and an out-of-range number otherwise.
+        */
+        unsigned short findFreeVoice() const;
+
+        /**
+        * Turns the given Voice on. This method must only be called by the real-time
+        * thread.
+        * @param[in] voiceNumber Voice to turn on.
+        */
+        void turnVoiceOn(unsigned short voiceNumber);
+
+        /**
+        * Turns the given Voice off and sets it free. This method must only be
+        * called by the real-time thread.
+        * @param[in] voiceNumber Voice to turn off and set free.
+        */
+        void turnVoiceOffAndSetItFree(unsigned short voiceNumber);
+
+        /**
+        * Instructs the AudioWorkflow to take the given Voice, so it is not marked
+        * as free anymore, and to make it play the given note. This method takes the
+        * note, sends the note to play to the Voice, then resets every Instrument
+        * located in the latter, and starts them all. Note that every parameter is
+        * expected to be in-range, and that no safety check will be performed by
+        * this method.
+        * @param[in] voiceNumber Voice that should play the note.
+        * @param[in] noteNumber Note number to send to the Voice.
+        * @param[in] velocity Velocity to play the note with.
+        */
+        void takeVoiceAndPlayNote(unsigned short voiceNumber, unsigned char noteNumber, unsigned char noteVelocity);
+
+        /**
+        * Returns true if the given Voice is playing the given \p noteNumber, and
+        * false otherwise. Note that \p voiceNumber is expected to be in-range, and
+        * that, consequently, no safety check will be performed by this method.
+        * @param[in] voiceNumber Voice to test.
+        * @param[in] noteNumber Note to look for in the given Voice.
+        */
+        bool playsNoteNumber(unsigned short voiceNumber, unsigned char noteNumber) const;
 
     protected:
 
@@ -1581,6 +1669,7 @@ namespace ANGLECORE
         std::shared_ptr<Mixer> m_mixer;
         Voice m_voices[ANGLECORE_NUM_VOICES];
         GlobalContext m_globalContext;
+        std::mutex m_lock;
     };
 
 
@@ -1787,9 +1876,10 @@ namespace ANGLECORE
         * Timestamp of the message as a sample position within the current audio
         * buffer
         */
-        uint32_t sample;
+        uint32_t timestamp;
 
         unsigned char noteNumber;
+        unsigned char noteVelocity;
 
         /**
         * Creates a MIDI message of type NONE, and initializes every attribute to
@@ -1849,6 +1939,12 @@ namespace ANGLECORE
         Master();
 
         /**
+        * Sets the sample rate of the Master's AudioWorkflow.
+        * @param[in] sampleRate The value of the sample rate, in Hz.
+        */
+        void setSampleRate(floating_type sampleRate);
+
+        /**
         * Clears the Master's internal MIDIBuffer to prepare for rendering the next
         * audio block.
         */
@@ -1856,7 +1952,8 @@ namespace ANGLECORE
 
         /**
         * Adds a new MIDIMessage at the end of the Master's internal MIDIBuffer, and
-        * returns a reference to it.
+        * returns a reference to it. This method should only be called by the
+        * real-time thread, right before calling the renderNextAudioBlock() method.
         */
         MIDIMessage& pushBackNewMIDIMessage();
 
@@ -1886,8 +1983,7 @@ namespace ANGLECORE
         void processMIDIMessage(const MIDIMessage& message);
 
     private:
-        AudioWorkflow m_workflow;
-        std::mutex m_workflowLock;
+        AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
     };
@@ -1895,10 +1991,10 @@ namespace ANGLECORE
     template<class InstrumentType>
     bool Master::addInstrument()
     {
-        std::lock_guard<std::mutex> scopedLock(m_workflowLock);
+        std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
 
         /* Can we insert a new instrument? We need to find an empty spot first */
-        unsigned short emptyRackNumber = m_workflow.findEmptyRackNumber();
+        unsigned short emptyRackNumber = m_audioWorkflow.findEmptyRack();
         if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
 
             /*
@@ -1928,7 +2024,7 @@ namespace ANGLECORE
             * Then, we insert the Instrument into the Workflow and plan its bridging
             * to the real-time rendering pipeline.
             */
-            m_workflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
+            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
         }
 
         /*
@@ -1942,14 +2038,14 @@ namespace ANGLECORE
         * We first calculate the rendering sequence that will take effect right
         * after the plan is executed.
         */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_workflow.buildRenderingSequence(plan);
+        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(plan);
 
         /*
         * And from that sequence, we can precompute and assign the rest of the
         * request properties:
         */
         request->newRenderingSequence = newRenderingSequence;
-        request->newVoiceAssignments = m_workflow.getVoiceAssignments(newRenderingSequence);
+        request->newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
         request->oneIncrements.resize(newRenderingSequence.size(), 1);
 
         /*
@@ -1986,7 +2082,7 @@ namespace ANGLECORE
         * To avoid infinite loops and therefore deadlocks while waiting for the
         * real-time thread, we introduce a timeout, using a number of attempts.
         */
-        const unsigned short timeoutAttempts = 20;
+        const unsigned short timeoutAttempts = 4;
         unsigned short attempt = 0;
 
         /*
@@ -1994,7 +2090,7 @@ namespace ANGLECORE
         * arise.
         */
         while (request.use_count() > 1 && attempt++ < timeoutAttempts)
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         /*
         * Once here, we either reached the timeout, or the copy of the

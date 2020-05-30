@@ -21,7 +21,6 @@
 **********************************************************************/
 
 #include "VoiceContext.h"
-#include "../../config/RenderingConfig.h"
 #include "../../config/MathConfig.h"
 #include "../../config/AudioConfig.h"
 
@@ -37,7 +36,7 @@ namespace ANGLECORE
         Worker(Input::NUM_INPUTS, 1)
     {}
 
-    void VoiceContext::RatioCalculator::work(unsigned int /* numSamplesToWorkOn */)
+    void VoiceContext::RatioCalculator::work(unsigned int numSamplesToWorkOn)
     {
         /*
         * To compute the division with better speed, we use the reciprocal of the
@@ -47,7 +46,7 @@ namespace ANGLECORE
         const floating_type* frequency = getInputStream(Input::FREQUENCY);
         const floating_type* sampleRateReciprocal = getInputStream(Input::SAMPLE_RATE_RECIPROCAL);
         floating_type* output = getOutputStream(0);
-        for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
+        for (unsigned int i = 0; i < numSamplesToWorkOn; i++)
             output[i] = frequency[i] * sampleRateReciprocal[i];
     }
 

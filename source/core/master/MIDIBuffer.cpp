@@ -33,7 +33,7 @@ namespace ANGLECORE
 
     MIDIMessage::MIDIMessage() :
         type(Type::NONE),
-        sample(0),
+        timestamp(0),
         noteNumber(0)
     {}
 
@@ -49,9 +49,10 @@ namespace ANGLECORE
         m_capacity(ANGLECORE_MIDIBUFFER_SIZE),
 
         /*
-        * The m_messages vector is initialized with m_capacity empty MIDI messages.
+        * The m_messages vector is initialized with ANGLECORE_MIDIBUFFER_SIZE empty
+        * MIDI messages.
         */
-        m_messages(m_capacity),
+        m_messages(ANGLECORE_MIDIBUFFER_SIZE),
 
         /*
         * The buffer is considered initially empty (despite having its memory pre-

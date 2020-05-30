@@ -35,10 +35,12 @@ namespace ANGLECORE
         Worker(1, 1),
 
         /*
-        * The initial value of the internal copy of the sample rate should match the
-        * default value of the sample rate parameter.
+        * The initial value of the internal copy of the sample rate should NOT match
+        * the default value of the sample rate parameter, as we must trigger a
+        * computation the first time the inverter is called. Since we know the
+        * sample rate is never null, we can use a value of zero here.
         */
-        m_oldSampleRate(1.0)
+        m_oldSampleRate(0.0)
     {}
 
     void GlobalContext::SampleRateInverter::work(unsigned int /* numSamplesToWorkOn */)

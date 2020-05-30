@@ -49,6 +49,12 @@ namespace ANGLECORE
         Master();
 
         /**
+        * Sets the sample rate of the Master's AudioWorkflow.
+        * @param[in] sampleRate The value of the sample rate, in Hz.
+        */
+        void setSampleRate(floating_type sampleRate);
+
+        /**
         * Clears the Master's internal MIDIBuffer to prepare for rendering the next
         * audio block.
         */
@@ -56,7 +62,8 @@ namespace ANGLECORE
 
         /**
         * Adds a new MIDIMessage at the end of the Master's internal MIDIBuffer, and
-        * returns a reference to it.
+        * returns a reference to it. This method should only be called by the
+        * real-time thread, right before calling the renderNextAudioBlock() method.
         */
         MIDIMessage& pushBackNewMIDIMessage();
 
@@ -86,8 +93,7 @@ namespace ANGLECORE
         void processMIDIMessage(const MIDIMessage& message);
 
     private:
-        AudioWorkflow m_workflow;
-        std::mutex m_workflowLock;
+        AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
     };
@@ -95,10 +101,10 @@ namespace ANGLECORE
     template<class InstrumentType>
     bool Master::addInstrument()
     {
-        std::lock_guard<std::mutex> scopedLock(m_workflowLock);
+        std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
 
         /* Can we insert a new instrument? We need to find an empty spot first */
-        unsigned short emptyRackNumber = m_workflow.findEmptyRackNumber();
+        unsigned short emptyRackNumber = m_audioWorkflow.findEmptyRack();
         if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
 
             /*
@@ -128,7 +134,7 @@ namespace ANGLECORE
             * Then, we insert the Instrument into the Workflow and plan its bridging
             * to the real-time rendering pipeline.
             */
-            m_workflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
+            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
         }
 
         /*
@@ -142,14 +148,14 @@ namespace ANGLECORE
         * We first calculate the rendering sequence that will take effect right
         * after the plan is executed.
         */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_workflow.buildRenderingSequence(plan);
+        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(plan);
 
         /*
         * And from that sequence, we can precompute and assign the rest of the
         * request properties:
         */
         request->newRenderingSequence = newRenderingSequence;
-        request->newVoiceAssignments = m_workflow.getVoiceAssignments(newRenderingSequence);
+        request->newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
         request->oneIncrements.resize(newRenderingSequence.size(), 1);
 
         /*
@@ -186,7 +192,7 @@ namespace ANGLECORE
         * To avoid infinite loops and therefore deadlocks while waiting for the
         * real-time thread, we introduce a timeout, using a number of attempts.
         */
-        const unsigned short timeoutAttempts = 20;
+        const unsigned short timeoutAttempts = 4;
         unsigned short attempt = 0;
 
         /*
@@ -194,7 +200,7 @@ namespace ANGLECORE
         * arise.
         */
         while (request.use_count() > 1 && attempt++ < timeoutAttempts)
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         /*
         * Once here, we either reached the timeout, or the copy of the

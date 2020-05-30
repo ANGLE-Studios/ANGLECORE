@@ -147,8 +147,8 @@ namespace ANGLECORE
                         * statement:
                         */
                         {
-                            floating_type startValue = std::max(m_currentValue, ANGLECORE_EPSILON);
-                            floating_type endValue = std::max(targetValue, ANGLECORE_EPSILON);
+                            floating_type startValue = std::max(m_currentValue, static_cast<floating_type>(ANGLECORE_EPSILON));
+                            floating_type endValue = std::max(targetValue, static_cast<floating_type>(ANGLECORE_EPSILON));
 
                             /*
                             * We now know for sure that both 'startValue' and
@@ -174,7 +174,7 @@ namespace ANGLECORE
                     * sequence to start and render properly.
                     */
                     if (m_parameter.smoothingMethod == Parameter::SmoothingMethod::MULTIPLICATIVE)
-                        m_currentValue = std::max(m_currentValue, ANGLECORE_EPSILON);
+                        m_currentValue = std::max(m_currentValue, static_cast<floating_type>(ANGLECORE_EPSILON));
                 }
 
                 /*
@@ -350,5 +350,20 @@ namespace ANGLECORE
 
             break;
         }
+    }
+
+    void ParameterGenerator::setParameterValue(floating_type newValue)
+    {
+        /*
+        * We implement the same code as if we were processing an instantaneous
+        * ParameterChangeRequest that did not require any transient stage: we change
+        * the parameter's current value, without forgetting to clamp it into the
+        * parameter's range, and we enter the TRANSIENT_TO_STEADY stage. This way,
+        * on the next rendering call, the output stream will be filled up with the
+        * new value. This technique has the interesting benefit of only filling the
+        * output stream when necessary, during a rendering call.
+        */
+        m_currentValue = std::max(m_parameter.minimalValue, std::min(newValue, m_parameter.maximalValue));
+        m_currentState = State::TRANSIENT_TO_STEADY;
     }
 }

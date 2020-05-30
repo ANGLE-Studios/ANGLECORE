@@ -113,6 +113,25 @@ namespace ANGLECORE
         */
         const std::vector<Parameter>& getParameters() const;
 
+        /**
+        * Instructs the Instrument to reset itself, in order to be ready to play a
+        * new note. This method will always be called when the end-user requests to
+        * play a note, right before rendering. Subclasses of the Instrument class
+        * must override this method and define a convenient behavior during this
+        * reinitialization. For instance, instruments can use this opportunity to
+        * read the sample rate and update internal parameters if it has changed.
+        */
+        virtual void reset() = 0;
+
+        /**
+        * Instructs the Instrument to start playing. This method will always be
+        * called right after the reset() method. Subclasses of the Instrument class
+        * must override this method and define a convenient behavior during this
+        * initialization step. For instance, instruments can use this opportunity to
+        * change the state of an internal Envelope.
+        */
+        virtual void startPlaying() = 0;
+
     private:
         const std::vector<ContextParameter> m_contextParameters;
         const std::vector<Parameter> m_parameters;

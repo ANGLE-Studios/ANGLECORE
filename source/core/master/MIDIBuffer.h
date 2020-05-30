@@ -51,9 +51,10 @@ namespace ANGLECORE
         * Timestamp of the message as a sample position within the current audio
         * buffer
         */
-        uint32_t sample;
+        uint32_t timestamp;
 
         unsigned char noteNumber;
+        unsigned char noteVelocity;
 
         /**
         * Creates a MIDI message of type NONE, and initializes every attribute to

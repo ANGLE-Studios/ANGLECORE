@@ -68,6 +68,16 @@ namespace ANGLECORE
         */
         void work(unsigned int numSamplesToWorkOn);
 
+        /**
+        * Instructs the generator to change the parameter's value instantaneously,
+        * without any transient phase. This method must never be called by the non
+        * real-time thread, and should only be called by the real-time thread.
+        * Requests emitted by the non-real thread should use the
+        * postParameterChangeRequest() method instead.
+        * @param[in] newValue The new value of the Parameter.
+        */
+        void setParameterValue(floating_type newValue);
+
     private:
 
         /**
