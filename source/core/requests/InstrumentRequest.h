@@ -24,35 +24,40 @@
 
 #include <memory>
 
-#include "workflow/Worker.h"
-#include "parameter/Parameter.h"
-#include "parameter/ParameterGenerator.h"
-#include "workflow/Stream.h"
+#include "ConnectionRequest.h"
 
 namespace ANGLECORE
 {
     /**
-    * \struct GlobalContext GlobalContext.h
-    * Set of streams which provide useful information, such as the sample rate the
-    * audio should be rendered into, in a centralized spot, shared by the rest of
-    * the AudioWorkflow.
+    * \struct InstrumentRequest InstrumentRequest.h
+    * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
+    * an instance of this structure is created to request the Mixer of the
+    * AudioWorkflow to either activate or deactivate the corresponding rack for its
+    * mixing process, and to create or remove the necessary connections within the
+    * AudioWorkflow.
     */
-    struct GlobalContext
+    struct InstrumentRequest
     {
-        std::shared_ptr<Stream> sampleRateStream;
-        std::shared_ptr<Stream> sampleRateReciprocalStream;
+        enum Type
+        {
+            ADD = 0,
+            REMOVE,
+            NUM_TYPES
+        };
+
+        Type type;
+        unsigned short rackNumber;
 
         /**
-        * Creates a GlobalContext, hereby initializing every pointer to a Stream or
-        * a Worker to a non null pointer. Note that this method does not do any
-        * connection between streams and workers, as this is the responsability of
-        * the AudioWorkflow to which the GlobalContext belong.
+        * ConnectionRequest that matches the InstrumentRequest, and which instructs
+        * to add or remove connections from the AudioWorkflow the Instrument will be
+        * inserted into or removed from.
         */
-        GlobalContext();
+        ConnectionRequest connectionRequest;
 
-        void setSampleRate(floating_type sampleRate);
-
-    private:
-        floating_type m_currentSampleRate;
+        /**
+        * Creates an InstrumentRequest.
+        */
+        InstrumentRequest(Type type, unsigned short rackNumber);
     };
 }

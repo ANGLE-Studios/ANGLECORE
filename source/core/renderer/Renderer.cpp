@@ -24,17 +24,10 @@
 
 namespace ANGLECORE
 {
-    Renderer::Renderer(Workflow& workflow) :
-        m_workflow(workflow),
+    Renderer::Renderer() :
         m_isReadyToRender(false),
         m_start(0),
-        m_shouldUpdateIncrements(false),
-
-        /*
-        * The request queue should only handle one request at a time, so there is no
-        * need to reserve more space than one slot.
-        */
-        m_connectionRequests(1)
+        m_shouldUpdateIncrements(false)
     {}
 
     void Renderer::render(unsigned int numSamplesToRender)
@@ -46,84 +39,9 @@ namespace ANGLECORE
         * should always be valid, even when the renderer has just been created, and
         * all the variables have been set to their initial value.
         */
-
-        /*=============================
-        * STEP 1/3: CONNECTION REQUESTS
-        ===============================*/
-
-        {
-            /*
-            * We define a scope here so that the following pointer is deleted as
-            * soon as possible. This pointer will hold a copy of any
-            * ConnectionRequest that has been sent by the Master to the Renderer.
-            * When it is deleted, its reference count will decrement, and hereby
-            * signal to the Master the ConnectionRequest has been processed.
-            */
-            std::shared_ptr<ConnectionRequest> request;
-
-            /* Has a ConnectionRequest been received? ... */
-            if (m_connectionRequests.pop(request) && request)
-            {
-                /*
-                * ... YES! So we need to process the request first before doing any
-                * rendering call. Note that null pointers are ignored.
-                */
-
-                /*
-                * Once here, the variable 'request' should be the second and last
-                * pointer to the current ConnectionRequest, together with the
-                * Master's initial pointer. This is because the pop operation
-                * actually moves the request into the variable 'request', avoiding
-                * copies.
-                */
-
-                /* We only execute the request if it is valid, i.e. if it contains a
-                * non-empty rendering sequence, and if its voice assigments and one
-                * increments vector are of the same size as the sequence.
-                */
-                uint32_t size = request->newRenderingSequence.size();
-                if (size > 0 && request->newVoiceAssignments.size() == size && request->oneIncrements.size() == size)
-                {
-                    /* The request is valid, so execute the ConnectionPlan... */
-                    bool success = m_workflow.executeConnectionPlan(request->plan);
-
-                    /*
-                    * ... And notify the Master through the request if the execution
-                    * was a success:
-                    */
-                    request->hasBeenSuccessfullyProcessed.store(success);
-
-                    /* Then we move every vector from the request to the renderer */
-                    m_renderingSequence = std::move(request->newRenderingSequence);
-                    m_voiceAssignments = std::move(request->newVoiceAssignments);
-                    m_increments = std::move(request->oneIncrements);
-
-                    /*
-                    * Note that once here, after the move operations, the three
-                    * vectors newRenderingSequence, newVoiceAssignments, and
-                    * oneIncrements are in a valid but unspecified state. So the
-                    * Master should never try to access these vectors once it has
-                    * posted a ConnectionRequest. The Master can still access the
-                    * hasBeenSuccessfullyProcessed atomic variable though, and use
-                    * it to detect if the real-time thread has executed the
-                    * ConnectionRequest successfully.
-                    */
-
-                    m_isReadyToRender = true;
-                    m_shouldUpdateIncrements = true;
-                }
-            }
-
-            /*
-            * Once here, the 'request' pointer will be deleted, hereby decrementing
-            * its reference count by one. Since connection requests are supposed to
-            * be hold by the Master and copied before being sent to the Renderer,
-            * no memory deallocation should occur here.
-            */
-        }
         
         /*===============================
-        * STEP 2/3: UPDATE THE INCREMENTS
+        * STEP 1/2: UPDATE THE INCREMENTS
         =================================*/
 
         if (m_shouldUpdateIncrements)
@@ -133,7 +51,7 @@ namespace ANGLECORE
         }
 
         /*=========================
-        * STEP 3/3: RENDER SEQUENCE
+        * STEP 2/2: RENDER SEQUENCE
         ===========================*/
 
         if (m_isReadyToRender)
@@ -158,9 +76,32 @@ namespace ANGLECORE
             m_shouldUpdateIncrements = true;
     }
 
-    void Renderer::postConnectionRequest(std::shared_ptr<ConnectionRequest>&& request)
+    void Renderer::processConnectionRequest(ConnectionRequest& request)
     {
-        m_connectionRequests.push(std::move(request));
+        /*
+        * The request is assumed to be valid, i.e. it should contain a non-empty
+        * rendering sequence, and its voice assigments and one increment vector
+        * should be of the same size as the sequence.
+        */
+
+        /* We move every vector from the request to the renderer */
+        m_renderingSequence = std::move(request.newRenderingSequence);
+        m_voiceAssignments = std::move(request.newVoiceAssignments);
+        m_increments = std::move(request.oneIncrements);
+
+        /*
+        * Note that once here, after the move operations, the three vectors
+        * newRenderingSequence, newVoiceAssignments, and oneIncrements are in a
+        * valid but unspecified state within the ConnectionRequest. So the
+        * Master should never try to access these vectors once it has posted a
+        * ConnectionRequest. The Master can still access the
+        * hasBeenSuccessfullyProcessed atomic variable though, and use it to
+        * detect if the real-time thread has executed the ConnectionRequest
+        * successfully.
+        */
+
+        m_isReadyToRender = true;
+        m_shouldUpdateIncrements = true;
     }
 
     void Renderer::updateIncrements()

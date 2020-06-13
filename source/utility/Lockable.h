@@ -22,37 +22,32 @@
 
 #pragma once
 
-#include <memory>
-
-#include "workflow/Worker.h"
-#include "parameter/Parameter.h"
-#include "parameter/ParameterGenerator.h"
-#include "workflow/Stream.h"
+#include <mutex>
 
 namespace ANGLECORE
 {
     /**
-    * \struct GlobalContext GlobalContext.h
-    * Set of streams which provide useful information, such as the sample rate the
-    * audio should be rendered into, in a centralized spot, shared by the rest of
-    * the AudioWorkflow.
+    * \class Lockable Lockable.h
+    * Utility object that can be locked for handling concurrency issues. The class
+    * simply contains a mutex and a public method to access it by reference in order
+    * to lock it.
     */
-    struct GlobalContext
+    class Lockable
     {
-        std::shared_ptr<Stream> sampleRateStream;
-        std::shared_ptr<Stream> sampleRateReciprocalStream;
+    public:
 
         /**
-        * Creates a GlobalContext, hereby initializing every pointer to a Stream or
-        * a Worker to a non null pointer. Note that this method does not do any
-        * connection between streams and workers, as this is the responsability of
-        * the AudioWorkflow to which the GlobalContext belong.
+        * Returns the Lockable's internal mutex. Note that Lockable objects never
+        * lock their mutex themselves: it is the responsability of the caller to
+        * lock a Lockable appropriately when consulting or modifying its content in
+        * a multi-threaded environment.
         */
-        GlobalContext();
-
-        void setSampleRate(floating_type sampleRate);
+        std::mutex& getLock()
+        {
+            return m_lock;
+        }
 
     private:
-        floating_type m_currentSampleRate;
+        std::mutex m_lock;
     };
 }

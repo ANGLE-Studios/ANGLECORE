@@ -29,6 +29,7 @@
 */
 
 #define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. It should equal float or double. Note that one can still use double precision within the workers of an AudioWorkflow if this is set to float. */
+#define ANGLECORE_EXPORT_TYPE float          /**< Defines the precision of ANGLECORE's export samples as either single or double. It should equal float or double. Note that one can still use double precision in an AudioWorkflow if this is set to float. */
 
 /*
 * =====================================================================
@@ -36,7 +37,7 @@
 * =====================================================================
 */
 
-#define ANGLECORE_FIXED_STREAM_SIZE 256    /**< Fixed size to use for rendering (the rendering will be splitted into chunks of this size). */
+#define ANGLECORE_FIXED_STREAM_SIZE 512    /**< Fixed size to use for rendering (the rendering will be splitted into chunks of this size). */
 #define ANGLECORE_NUM_VOICES 32
 #define ANGLECORE_MIDIBUFFER_SIZE 2048     /**< Minimum number of MIDI messages the engine can handle without resizing. */
 
@@ -51,4 +52,5 @@
 namespace ANGLECORE
 {
     typedef ANGLECORE_PRECISION floating_type;
+    typedef ANGLECORE_EXPORT_TYPE export_type;
 }

@@ -25,10 +25,10 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
-#include <mutex>
 
 #include "workflow/Workflow.h"
 #include "voiceassigner/VoiceAssigner.h"
+#include "../../utility/Lockable.h"
 #include "Exporter.h"
 #include "Mixer.h"
 #include "../../config/AudioConfig.h"
@@ -45,7 +45,8 @@ namespace ANGLECORE
     */
     class AudioWorkflow :
         public Workflow,
-        public VoiceAssigner
+        public VoiceAssigner,
+        public Lockable
     {
     public:
 
@@ -57,14 +58,6 @@ namespace ANGLECORE
         * @param[in] sampleRate The value of the sample rate, in Hz.
         */
         void setSampleRate(floating_type sampleRate);
-
-        /**
-        * Returns the AudioWorkflow's internal mutex for handling concurrency
-        * issues. Note that the AudioWorkflow never locks itself: it is the
-        * responsability of the caller to lock the AudioWorkflow appropriately when
-        * consulting or modifying its content in a multi-threaded environment.
-        */
-        std::mutex& getLock();
 
         /**
         * Builds and returns the Workflow's rendering sequence, starting from its
@@ -150,6 +143,20 @@ namespace ANGLECORE
         */
         bool playsNoteNumber(unsigned short voiceNumber, unsigned char noteNumber) const;
 
+        /**
+        * Requests the Mixer to turn the given Rack on and use it in the mix. This
+        * method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to turn on.
+        */
+        void turnRackOn(unsigned short rackNumber);
+
+        /**
+        * Requests the Mixer to turn the given Rack off and stop using it in the
+        * mix. This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to turn off.
+        */
+        void turnRackOff(unsigned short rackNumber);
+
     protected:
 
         /**
@@ -200,10 +207,9 @@ namespace ANGLECORE
         uint32_t getVelocityStreamID(unsigned short voiceNumber) const;
 
     private:
-        std::shared_ptr<Exporter<float>> m_exporter;
+        std::shared_ptr<Exporter> m_exporter;
         std::shared_ptr<Mixer> m_mixer;
         Voice m_voices[ANGLECORE_NUM_VOICES];
         GlobalContext m_globalContext;
-        std::mutex m_lock;
     };
 }

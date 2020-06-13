@@ -34,9 +34,22 @@
 #include "../audioworkflow/instrument/Instrument.h"
 #include "../../config/RenderingConfig.h"
 #include "../../config/AudioConfig.h"
+#include "../requests/InstrumentRequest.h"
 
 namespace ANGLECORE
 {
+    /**
+    * \struct TailTracker Master.h
+    * A TailTracker tracks an Instrument's position while it stops playing and
+    * render its audio tail. This structure can store how close the Instrument is to
+    * the end of its tail (in terms of remaining samples).
+    */
+    struct TailTracker
+    {
+        uint32_t tailDurationInSamples;
+        uint32_t position;
+    };
+
     /**
     * \class Master Master.h
     * Agent that orchestrates the rendering and the interaction with the end-user
@@ -89,6 +102,9 @@ namespace ANGLECORE
 
     protected:
 
+        /** Processes the requests received in its internal queues. */
+        void processRequests();
+
         /** Processes the given MIDIMessage. */
         void processMIDIMessage(const MIDIMessage& message);
 
@@ -96,6 +112,15 @@ namespace ANGLECORE
         AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
+
+        /** Queue for pushing and receiving instrument requests. */
+        farbot::fifo<
+            std::shared_ptr<InstrumentRequest>,
+            farbot::fifo_options::concurrency::single,
+            farbot::fifo_options::concurrency::single,
+            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
+            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
+        > m_instrumentRequests;
     };
 
     template<class InstrumentType>
@@ -115,12 +140,13 @@ namespace ANGLECORE
 
         /*
         * Otherwise, if we can insert a new instrument, then we need to prepare the
-        * instrument's environment, as well as a new ConnectionRequest for bridging
+        * instrument's environment, as well as a new InstrumentRequest for bridging
         * the instrument with the real-time rendering pipeline.
         */
 
-        std::shared_ptr<ConnectionRequest> request = std::make_shared<ConnectionRequest>();
-        ConnectionPlan& plan = request->plan;
+        std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
+        ConnectionRequest& connectionRequest = request->connectionRequest;
+        ConnectionPlan& plan = connectionRequest.plan;
 
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
@@ -154,12 +180,12 @@ namespace ANGLECORE
         * And from that sequence, we can precompute and assign the rest of the
         * request properties:
         */
-        request->newRenderingSequence = newRenderingSequence;
-        request->newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
-        request->oneIncrements.resize(newRenderingSequence.size(), 1);
+        connectionRequest.newRenderingSequence = newRenderingSequence;
+        connectionRequest.newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
+        connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
 
         /*
-        * Finally, we need to send the ConnectionRequest to the Renderer. To avoid
+        * Finally, we need to send the InstrumentRequest to the Renderer. To avoid
         * any memory deallocation by the real-time thread after it is done with the
         * request, we do not pass the request straight to the Renderer. Instead, we
         * create a copy and send that copy to the latter. Therefore, when the
@@ -169,23 +195,22 @@ namespace ANGLECORE
         * it can be safely destroyed by the non real-time thread that created it.
         */
 
-        /* We copy the ConnectionRequest... */
-        std::shared_ptr<ConnectionRequest> requestCopy = request;
+        /* We copy the InstrumentRequest... */
+        std::shared_ptr<InstrumentRequest> requestCopy = request;
 
         /* ... And post the copy:*/
-        m_renderer.postConnectionRequest(std::move(requestCopy));
+        m_instrumentRequests.push(std::move(requestCopy));
 
         /*
-        * From now on, the ConnectionRequest is in the hands of the real-time
-        * thread. We cannot access any member of 'request' except the atomic boolean
-        * 'hasBeenSuccessfullyProcessed'. We will still use the reference count of
-        * the shared pointer as an indicator of when the real-time thread is done
-        * with the request (although it is not guaranteed to be safe by the
-        * standard). As long as that number is greater than 1 (and, normally, equal
-        * to 2), the real-time thread is still in possession of the copy, and
-        * possibly processing it. So the non real-time thread should wait. When this
-        * number reaches one, it means the real-time thread is done with the request
-        * and the non real-time thread can safely delete it. 
+        * From now on, the InstrumentRequest is in the hands of the real-time
+        * thread. We cannot access any member of 'request'. We will still use the
+        * reference count of the shared pointer as an indicator of when the
+        * real-time thread is done with the request (although it is not guaranteed
+        * to be safe by the standard). As long as that number is greater than 1
+        * (and, normally, equal to 2), the real-time thread is still in possession
+        * of the copy, and possibly processing it. So the non real-time thread
+        * should wait. When this number reaches 1, it means the real-time thread is
+        * done with the request and the non real-time thread can safely delete it.
         */
 
         /*
@@ -204,7 +229,7 @@ namespace ANGLECORE
 
         /*
         * Once here, we either reached the timeout, or the copy of the
-        * ConnectionRequest has been destroyed, and only the original remains, and
+        * InstrumentRequest has been destroyed, and only the original remains, and
         * can be safely deleted. In any case, the original request will be deleted,
         * so if the timeout is the reason for leaving the loop, then the copy will
         * outlive the original in the real-time thread, which will trigger memory
@@ -219,6 +244,6 @@ namespace ANGLECORE
         * edited by the real-time thread, in order to determine whether or not the
         * request was been successfully processed.
         */
-        return request->hasBeenSuccessfullyProcessed.load();
+        return request->connectionRequest.hasBeenSuccessfullyProcessed.load();
     }
 }

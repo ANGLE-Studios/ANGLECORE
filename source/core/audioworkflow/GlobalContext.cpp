@@ -20,66 +20,63 @@
 **
 **********************************************************************/
 
-#include "GlobalContext.h"
-#include "../../config/RenderingConfig.h"
-#include "../../config/AudioConfig.h"
+#include <algorithm>
 
-#define ANGLECORE_SAMPLE_RATE_PARAMETER_ID "ANGLECORE_SAMPLE_RATE_PARAMETER_ID"
+#include "GlobalContext.h"
+#include "../../config/AudioConfig.h"
+#include "../../config/RenderingConfig.h"
 
 namespace ANGLECORE
 {
-    /* SampleRateInverter
-    ***************************************************/
-
-    GlobalContext::SampleRateInverter::SampleRateInverter() :
-        Worker(1, 1),
-
-        /*
-        * The initial value of the internal copy of the sample rate should NOT match
-        * the default value of the sample rate parameter, as we must trigger a
-        * computation the first time the inverter is called. Since we know the
-        * sample rate is never null, we can use a value of zero here.
-        */
-        m_oldSampleRate(0.0)
-    {}
-
-    void GlobalContext::SampleRateInverter::work(unsigned int /* numSamplesToWorkOn */)
+    GlobalContext::GlobalContext() :
+        m_currentSampleRate(1.0)
     {
-        const floating_type* sampleRate = getInputStream(0);
-
         /*
-        * To save time, we will only invert the sample rate stream when necessary,
-        * which is when we receive a new value. We use the first value of the sample
-        * rate stream to check for that.
+        * We create a stream for the sample rate as well as one fore its reciprocal
         */
-        if (sampleRate[0] != m_oldSampleRate)
+        sampleRateStream = std::make_shared<Stream>();
+        sampleRateReciprocalStream = std::make_shared<Stream>();
+
+        /* And then fill them up with an initial value of 1.0 */
+        floating_type* sampleRateRawData = sampleRateStream->getDataForWriting();
+        floating_type* sampleRateReciprocalRawData = sampleRateReciprocalStream->getDataForWriting();
+        for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
         {
-            /*
-            * If the sample rate has changed, we first register its new value, and
-            * then compute the reciprocal on the entire stream, for later use by all
-            * the items of the AudioWorkflow.
-            */
-            m_oldSampleRate = sampleRate[0];
-            floating_type* output = getOutputStream(0);
-            for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
-                output[i] = static_cast<floating_type>(1.0) / sampleRate[i];
+            sampleRateRawData[i] = static_cast<floating_type>(1.0);
+            sampleRateReciprocalRawData[i] = static_cast<floating_type>(1.0);
         }
     }
 
-    /* GlobalContext
-    ***************************************************/
-
-    GlobalContext::GlobalContext() :
+    void GlobalContext::setSampleRate(floating_type sampleRate)
+    {
+        /*
+        * The given sample rate is clamped between 1.0 and ANGLECORE_MAX_SAMPLE_RATE
+        * to ensure it is never negative, nor equal to zero (so we can invert it).
+        */
+        floating_type clampedSampleRate = std::max(static_cast<floating_type>(1.0), std::min(sampleRate, static_cast<floating_type>(ANGLECORE_MAX_SAMPLE_RATE)));
 
         /*
-        * We initialize the sampleRate parameter with a minimal value, to ensure it
-        * is never negative, nor equal to zero (so we can invert it).
+        * To save some computation time, we will only change the sample rate stream
+        * when necessary, which is when we receive a new value.
         */
-        sampleRate(ANGLECORE_SAMPLE_RATE_PARAMETER_ID, 1.0, 1.0, ANGLECORE_MAX_SAMPLE_RATE, Parameter::SmoothingMethod::MULTIPLICATIVE, false, 0)
-    {
-        sampleRateGenerator = std::make_shared<ParameterGenerator>(sampleRate);
-        sampleRateStream = std::make_shared<Stream>();
-        sampleRateInverter = std::make_shared<SampleRateInverter>();
-        sampleRateReciprocalStream = std::make_shared<Stream>();
+        if (clampedSampleRate != m_currentSampleRate)
+        {
+            /* We fill the sample rate stream with the new sample rate value. */
+            floating_type* sampleRateRawData = sampleRateStream->getDataForWriting();
+            for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
+                sampleRateRawData[i] = clampedSampleRate;
+
+            /*
+            * Then we compute the reciprocal of the sample rate, and fill the
+            * corresponding stream accordingly.
+            */
+            floating_type clampedSampleRateReciprocal = static_cast<floating_type>(1.0) / clampedSampleRate;
+            floating_type* sampleRateReciprocalRawData = sampleRateReciprocalStream->getDataForWriting();
+            for (unsigned int i = 0; i < ANGLECORE_FIXED_STREAM_SIZE; i++)
+                sampleRateReciprocalRawData[i] = clampedSampleRateReciprocal;
+
+            /* And finally, we update the current sample rate value */
+            m_currentSampleRate = clampedSampleRate;
+        }
     }
 }

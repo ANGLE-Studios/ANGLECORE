@@ -40,6 +40,23 @@ namespace ANGLECORE
 {
     /*
     =================================================
+    General Configuration
+    =================================================
+    */
+
+    #define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. It should equal float or double. Note that one can still use double precision within the workers of an AudioWorkflow if this is set to float. */
+    typedef ANGLECORE_PRECISION floating_type;
+
+    #define ANGLECORE_NUM_CHANNELS 2
+    #define ANGLECORE_EXPORT_TYPE float          /**< Defines the precision of ANGLECORE's export samples as either single or double. It should equal float or double. Note that one can still use double precision in an AudioWorkflow if this is set to float. */
+    typedef ANGLECORE_EXPORT_TYPE export_type;
+
+    #define ANGLECORE_NUM_VOICES 32
+
+    #define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
+
+    /*
+    =================================================
     Utility
     =================================================
     */
@@ -77,6 +94,31 @@ namespace ANGLECORE
 
         /** This is the internal pointer to the C string being viewed */
         const char* string_ptr;
+    };
+
+    /**
+    * \class Lockable Lockable.h
+    * Utility object that can be locked for handling concurrency issues. The class
+    * simply contains a mutex and a public method to access it by reference in order
+    * to lock it.
+    */
+    class Lockable
+    {
+    public:
+
+        /**
+        * Returns the Lockable's internal mutex. Note that Lockable objects never
+        * lock their mutex themselves: it is the responsability of the caller to
+        * lock a Lockable appropriately when consulting or modifying its content in
+        * a multi-threaded environment.
+        */
+        std::mutex& getLock()
+        {
+            return m_lock;
+        }
+
+    private:
+        std::mutex m_lock;
     };
 }
 
@@ -434,9 +476,6 @@ namespace ANGLECORE
         */
         static uint32_t nextId;
     };
-
-    #define ANGLECORE_PRECISION double          /**< Defines the precision of ANGLECORE's calculations as either single or double. It should equal float or double. Note that one can still use double precision within the workers of an AudioWorkflow if this is set to float. */
-    typedef ANGLECORE_PRECISION floating_type;
 
     /**
     * \class Stream Stream.h
@@ -945,15 +984,11 @@ namespace ANGLECORE
     =================================================
     */
 
-    #define ANGLECORE_NUM_CHANNELS 2
-    #define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
-
     /**
     * \class Exporter Exporter.h
     * Worker that exports data from its input streams into an output buffer sent
     * to the host. An exporter applies a gain for calibrating its output level.
     */
-    template<typename OutputType>
     class Exporter :
         public Worker
     {
@@ -962,11 +997,7 @@ namespace ANGLECORE
         /**
         * Creates a Worker with zero output.
         */
-        Exporter() :
-            Worker(ANGLECORE_NUM_CHANNELS, 0),
-            m_outputBuffer(nullptr),
-            m_numOutputChannels(0)
-        {}
+        Exporter();
 
         /**
         * Sets the new memory location to write into when exporting.
@@ -974,59 +1005,39 @@ namespace ANGLECORE
         * @param[in] numChannels Number of output channels.
         * @param[in] startSample Position to start from in the buffer.
         */
-        void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
-        {
-            m_outputBuffer = buffer;
-            m_numOutputChannels = numChannels;
-            m_startSample = startSample;
-        }
+        void setOutputBuffer(export_type** buffer, unsigned short numChannels, uint32_t startSample);
 
-        void work(unsigned int numSamplesToWorkOn)
-        {
-            /*
-            * It is assumed that both m_numOutputChannels and numSamplesToWorkOn
-            * are in-range, i.e. less than or equal to the output buffer's
-            * number of channels and the stream and buffer size respectively. It
-            * is also assumed the output buffer has been properly set to a valid
-            * memory location.
-            */
+        /**
+        * Exports its input streams into the memory location that was given by the
+        * setOutputBuffer() method. The Exporter will take care of any possible
+        * mismatch between the number of channels rendered by ANGLECORE and the
+        * number of channels requested by the host.
+        * @param[in] numSamplesToWorkOn Number of samples to export.
+        */
+        void work(unsigned int numSamplesToWorkOn);
 
-            /*
-            * If the host requests less channels than rendered, we sum their
-            * content using a modulo approach.
-            */
-            if (m_numOutputChannels < ANGLECORE_NUM_CHANNELS)
-            {
-                /* We first clear the output buffer */
-                for (unsigned short c = 0; c < m_numOutputChannels; c++)
-                    for (uint32_t i = 0; i < numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i + m_startSample] = 0.0;
+        /**
+        * Increments the voice count. The Exporter will only export data if its
+        * internal voice count is positive (> 0). Note that the voice count will
+        * be clipped before exceeding the maximum number of voices available if this
+        * method is called repeatedly.
+        */
+        void incrementVoiceCount();
 
-                /* And then we compute the sum into the output buffer */
-                for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
-                    for (uint32_t i = 0; i < numSamplesToWorkOn; i++)
-                        m_outputBuffer[c % m_numOutputChannels][i + m_startSample] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
-            }
-
-            /*
-            * Otherwise, if we have not rendered enough channels for the host,
-            * we simply duplicate data.
-            */
-            else
-            {
-                for (unsigned int c = 0; c < m_numOutputChannels; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i] = static_cast<OutputType>(getInputStream(c % ANGLECORE_NUM_CHANNELS)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
-            }
-        }
+        /**
+        * Decrements the voice count. The Exporter will stop exporting data when its
+        * internal voice count reaches the value of 0. Note that the voice count
+        * will be clipped so it does not become negative if this method is called
+        * repeatedly.
+        */
+        void decrementVoiceCount();
 
     private:
-        OutputType** m_outputBuffer;
+        export_type** m_outputBuffer;
         unsigned short m_numOutputChannels;
         uint32_t m_startSample;
+        unsigned short m_numVoicesOn;
     };
-
-    #define ANGLECORE_NUM_VOICES 32
 
     /**
     * \class Mixer Mixer.h
@@ -1065,14 +1076,35 @@ namespace ANGLECORE
         */
         void turnVoiceOff(unsigned short voiceNumber);
 
+        /**
+        * Turns the given Rack on and use it in the mix. This method must only be
+        * called by the real-time thread.
+        * @param[in] rackNumber Rack to turn on.
+        */
+        void turnRackOn(unsigned short rackNumber);
+
+        /**
+        * Turns the given Rack off and stop using it in the mix. This method must
+        * only be called by the real-time thread.
+        * @param[in] rackNumber Rack to turn off.
+        */
+        void turnRackOff(unsigned short rackNumber);
+
     private:
 
         /**
-        * Recomputes the Mixer's increments after a Voice has been turned on or off.
-        * This method is really fast, as it will only be called by the real-time
-        * thread.
+        * Recomputes the Mixer's voice increments after a Voice has been turned on
+        * or off. This method is really fast, as it will only be called by the
+        * real-time thread.
         */
-        void updateIncrements();
+        void updateVoiceIncrements();
+
+        /**
+        * Recomputes the Mixer's rack increments after a Voice has been turned on or
+        * off. This method is really fast, as it will only be called by the
+        * real-time thread.
+        */
+        void updateRackIncrements();
 
         const unsigned short m_totalNumInstruments;
 
@@ -1080,16 +1112,31 @@ namespace ANGLECORE
         * Voice to start from when mixing voices. This may vary depending on which
         * Voice is on and off.
         */
-        unsigned short m_start;
+        unsigned short m_voiceStart;
 
         /**
         * Jumps to perform between voices when mixing the audio output in order to
         * avoid those that are off.
         */
-        uint32_t m_increments[ANGLECORE_NUM_VOICES];
+        uint32_t m_voiceIncrements[ANGLECORE_NUM_VOICES];
 
         /** Tracks the on/off status of every Voice */
         bool m_voiceIsOn[ANGLECORE_NUM_VOICES];
+
+        /**
+        * Rack to start from when mixing audio. This may vary depending on which
+        * Rack is on and off.
+        */
+        unsigned short m_rackStart;
+
+        /**
+        * Jumps to perform between racks when mixing the audio output in order to
+        * avoid those corresponding to instruments that are off.
+        */
+        uint32_t m_rackIncrements[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
+
+        /** Tracks the on/off status of every Rack */
+        bool m_rackIsOn[ANGLECORE_NUM_VOICES];
     };
 
     /**
@@ -1137,7 +1184,7 @@ namespace ANGLECORE
     * When the end-user asks to change the value of a Parameter within an Instrument
     * (volume, etc.) or the entire AudioWorkflow (sample rate, etc.), an instance of
     * this structure is created to store all necessary information about that
-    *request.
+    * request.
     */
     struct ParameterChangeRequest
     {
@@ -1238,46 +1285,13 @@ namespace ANGLECORE
 
     /**
     * \struct GlobalContext GlobalContext.h
-    * Set of streams and workers designed to provide useful information, such as the
-    * sample rate the audio should be rendered into, in a centralized spot, shared
-    * by the rest of the AudioWorkflow. Note that Workers and streams are not
-    * connected upon creation: it is the responsability of the AudioWorkflow they
-    * will belong to to make the appropriate connections.
+    * Set of streams which provide useful information, such as the sample rate the
+    * audio should be rendered into, in a centralized spot, shared by the rest of
+    * the AudioWorkflow.
     */
     struct GlobalContext
     {
-        /**
-        * \class SampleRateInverter GlobalContext.h
-        * Worker that simply computes the sample-wise reciprocal of a Stream.
-        */
-        class SampleRateInverter :
-            public Worker
-        {
-        public:
-
-            /**
-            * Creates a SampleRateInverter, which is a Worker with one input and one
-            * output.
-            */
-            SampleRateInverter();
-
-            /**
-            * Computes the sample-wise reciprocal of a Stream if, and only if, a new
-            * value is detected in the input Stream. Note that the computation is
-            * done over the entire Stream, regardless of \p numSamplesToWorkOn, for
-            * later use by other items from the AudioWorkflow.
-            * @param[in] numSamplesToWorkOn This parameter will be ignored.
-            */
-            void work(unsigned int numSamplesToWorkOn);
-
-        private:
-            floating_type m_oldSampleRate;
-        };
-
-        Parameter sampleRate;
-        std::shared_ptr<ParameterGenerator> sampleRateGenerator;
         std::shared_ptr<Stream> sampleRateStream;
-        std::shared_ptr<SampleRateInverter> sampleRateInverter;
         std::shared_ptr<Stream> sampleRateReciprocalStream;
 
         /**
@@ -1287,6 +1301,11 @@ namespace ANGLECORE
         * the AudioWorkflow to which the GlobalContext belong.
         */
         GlobalContext();
+
+        void setSampleRate(floating_type sampleRate);
+
+    private:
+        floating_type m_currentSampleRate;
     };
 
     /**
@@ -1463,8 +1482,6 @@ namespace ANGLECORE
         VoiceContext();
     };
 
-    #define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
-
     /**
     * \struct Voice Voice.h
     * Set of workers and streams, which together form an audio engine that can be
@@ -1510,7 +1527,8 @@ namespace ANGLECORE
     */
     class AudioWorkflow :
         public Workflow,
-        public VoiceAssigner
+        public VoiceAssigner,
+        public Lockable
     {
     public:
 
@@ -1522,14 +1540,6 @@ namespace ANGLECORE
         * @param[in] sampleRate The value of the sample rate, in Hz.
         */
         void setSampleRate(floating_type sampleRate);
-
-        /**
-        * Returns the AudioWorkflow's internal mutex for handling concurrency
-        * issues. Note that the AudioWorkflow never locks itself: it is the
-        * responsability of the caller to lock the AudioWorkflow appropriately when
-        * consulting or modifying its content in a multi-threaded environment.
-        */
-        std::mutex& getLock();
 
         /**
         * Builds and returns the Workflow's rendering sequence, starting from its
@@ -1615,6 +1625,20 @@ namespace ANGLECORE
         */
         bool playsNoteNumber(unsigned short voiceNumber, unsigned char noteNumber) const;
 
+        /**
+        * Requests the Mixer to turn the given Rack on and use it in the mix. This
+        * method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to turn on.
+        */
+        void turnRackOn(unsigned short rackNumber);
+
+        /**
+        * Requests the Mixer to turn the given Rack off and stop using it in the
+        * mix. This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to turn off.
+        */
+        void turnRackOff(unsigned short rackNumber);
+
     protected:
 
         /**
@@ -1665,11 +1689,10 @@ namespace ANGLECORE
         uint32_t getVelocityStreamID(unsigned short voiceNumber) const;
 
     private:
-        std::shared_ptr<Exporter<float>> m_exporter;
+        std::shared_ptr<Exporter> m_exporter;
         std::shared_ptr<Mixer> m_mixer;
         Voice m_voices[ANGLECORE_NUM_VOICES];
         GlobalContext m_globalContext;
-        std::mutex m_lock;
     };
 
 
@@ -1733,9 +1756,8 @@ namespace ANGLECORE
         * Creates a Renderer with an empty rendering sequence. The Renderer will not
         * be ready to render anything upon creation: it will wait to be initialized
         * with a ConnectionRequest.
-        * @param[in] workflow The Workflow to execute connection requests on
         */
-        Renderer(Workflow& workflow);
+        Renderer();
 
         /**
         * Renders the given number of samples. This method constitutes the kernel of
@@ -1764,14 +1786,20 @@ namespace ANGLECORE
         void turnVoiceOff(unsigned short voiceNumber);
 
         /**
-        * Pushes the given request to the request queue. This method uses move
-        * semantics, so it will take ownership of the pointer passed as argument. It
-        * will never be called by the real-time thread, and will only be called by
-        * the non real-time thread upon user request.
-        * @param[in] request The ConnectionRequest to post to the Renderer. It will
-        *   not be processed immediately, but before rendering the next audio block.
+        * Acquires the new rendering sequence and voice assignments from the given
+        * ConnectionRequest, as well as the increment vector. The request passed as
+        * argument must be valid, as this method will perform no validity check and
+        * take the ConnectionRequest's results from granted. This method uses move
+        * semantics, so it will take ownership of the vectors contained in the
+        * ConnectionRequest passed as argument. This method must only be called by
+        * the real-time thread.
+        * @param[in] request The ConnectionRequest to take the results from. It
+        *   should be a valid ConnectionRequest, i.e. it should respect the two
+        *   properties defined in the structure definition (the rendering sequence,
+        *   voice assignments and one increment vectors must all be of the same size
+        *   and must all be non empty).
         */
-        void postConnectionRequest(std::shared_ptr<ConnectionRequest>&& request);
+        void processConnectionRequest(ConnectionRequest& request);
 
     private:
 
@@ -1781,12 +1809,6 @@ namespace ANGLECORE
         * as it will be called by the real-time thread.
         */
         void updateIncrements();
-
-        /**
-        * The Workflow the Renderer is working with. When processing connection
-        * requests, this is the Workflow on which the request will be executed.
-        */
-        Workflow& m_workflow;
 
         /**
         * Boolean flag which signals when the rendering sequence and voice
@@ -1833,15 +1855,6 @@ namespace ANGLECORE
         * a new ConnectionRequest has been received.
         */
         bool m_shouldUpdateIncrements;
-
-        /** Queue for receiving connection requests. */
-        farbot::fifo<
-            std::shared_ptr<ConnectionRequest>,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
-        > m_connectionRequests;
     };
 
 
@@ -1928,6 +1941,39 @@ namespace ANGLECORE
     };
 
     /**
+    * \struct InstrumentRequest InstrumentRequest.h
+    * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
+    * an instance of this structure is created to request the Mixer of the
+    * AudioWorkflow to either activate or deactivate the corresponding rack for its
+    * mixing process, and to create or remove the necessary connections within the
+    * AudioWorkflow.
+    */
+    struct InstrumentRequest
+    {
+        enum Type
+        {
+            ADD = 0,
+            REMOVE,
+            NUM_TYPES
+        };
+
+        Type type;
+        unsigned short rackNumber;
+
+        /**
+        * ConnectionRequest that matches the InstrumentRequest, and which instructs
+        * to add or remove connections from the AudioWorkflow the Instrument will be
+        * inserted into or removed from.
+        */
+        ConnectionRequest connectionRequest;
+
+        /**
+        * Creates an InstrumentRequest.
+        */
+        InstrumentRequest(Type type, unsigned short rackNumber);
+    };
+
+    /**
     * \class Master Master.h
     * Agent that orchestrates the rendering and the interaction with the end-user
     * requests. It should be the only entry point from outside when developping an
@@ -1979,6 +2025,9 @@ namespace ANGLECORE
 
     protected:
 
+        /** Processes the requests received in its internal queues. */
+        void processRequests();
+
         /** Processes the given MIDIMessage. */
         void processMIDIMessage(const MIDIMessage& message);
 
@@ -1986,6 +2035,15 @@ namespace ANGLECORE
         AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
+
+        /** Queue for pushing and receiving instrument requests. */
+        farbot::fifo<
+            std::shared_ptr<InstrumentRequest>,
+            farbot::fifo_options::concurrency::single,
+            farbot::fifo_options::concurrency::single,
+            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
+            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
+        > m_instrumentRequests;
     };
 
     template<class InstrumentType>
@@ -2005,12 +2063,13 @@ namespace ANGLECORE
 
         /*
         * Otherwise, if we can insert a new instrument, then we need to prepare the
-        * instrument's environment, as well as a new ConnectionRequest for bridging
+        * instrument's environment, as well as a new InstrumentRequest for bridging
         * the instrument with the real-time rendering pipeline.
         */
 
-        std::shared_ptr<ConnectionRequest> request = std::make_shared<ConnectionRequest>();
-        ConnectionPlan& plan = request->plan;
+        std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
+        ConnectionRequest& connectionRequest = request->connectionRequest;
+        ConnectionPlan& plan = connectionRequest.plan;
 
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
@@ -2044,12 +2103,12 @@ namespace ANGLECORE
         * And from that sequence, we can precompute and assign the rest of the
         * request properties:
         */
-        request->newRenderingSequence = newRenderingSequence;
-        request->newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
-        request->oneIncrements.resize(newRenderingSequence.size(), 1);
+        connectionRequest.newRenderingSequence = newRenderingSequence;
+        connectionRequest.newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
+        connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
 
         /*
-        * Finally, we need to send the ConnectionRequest to the Renderer. To avoid
+        * Finally, we need to send the InstrumentRequest to the Renderer. To avoid
         * any memory deallocation by the real-time thread after it is done with the
         * request, we do not pass the request straight to the Renderer. Instead, we
         * create a copy and send that copy to the latter. Therefore, when the
@@ -2059,23 +2118,22 @@ namespace ANGLECORE
         * it can be safely destroyed by the non real-time thread that created it.
         */
 
-        /* We copy the ConnectionRequest... */
-        std::shared_ptr<ConnectionRequest> requestCopy = request;
+        /* We copy the InstrumentRequest... */
+        std::shared_ptr<InstrumentRequest> requestCopy = request;
 
         /* ... And post the copy:*/
-        m_renderer.postConnectionRequest(std::move(requestCopy));
+        m_instrumentRequests.push(std::move(requestCopy));
 
         /*
-        * From now on, the ConnectionRequest is in the hands of the real-time
-        * thread. We cannot access any member of 'request' except the atomic boolean
-        * 'hasBeenSuccessfullyProcessed'. We will still use the reference count of
-        * the shared pointer as an indicator of when the real-time thread is done
-        * with the request (although it is not guaranteed to be safe by the
-        * standard). As long as that number is greater than 1 (and, normally, equal
-        * to 2), the real-time thread is still in possession of the copy, and
-        * possibly processing it. So the non real-time thread should wait. When this
-        * number reaches one, it means the real-time thread is done with the request
-        * and the non real-time thread can safely delete it.
+        * From now on, the InstrumentRequest is in the hands of the real-time
+        * thread. We cannot access any member of 'request'. We will still use the
+        * reference count of the shared pointer as an indicator of when the
+        * real-time thread is done with the request (although it is not guaranteed
+        * to be safe by the standard). As long as that number is greater than 1
+        * (and, normally, equal to 2), the real-time thread is still in possession
+        * of the copy, and possibly processing it. So the non real-time thread
+        * should wait. When this number reaches 1, it means the real-time thread is
+        * done with the request and the non real-time thread can safely delete it.
         */
 
         /*
@@ -2094,7 +2152,7 @@ namespace ANGLECORE
 
         /*
         * Once here, we either reached the timeout, or the copy of the
-        * ConnectionRequest has been destroyed, and only the original remains, and
+        * InstrumentRequest has been destroyed, and only the original remains, and
         * can be safely deleted. In any case, the original request will be deleted,
         * so if the timeout is the reason for leaving the loop, then the copy will
         * outlive the original in the real-time thread, which will trigger memory
@@ -2109,6 +2167,6 @@ namespace ANGLECORE
         * edited by the real-time thread, in order to determine whether or not the
         * request was been successfully processed.
         */
-        return request->hasBeenSuccessfullyProcessed.load();
+        return request->connectionRequest.hasBeenSuccessfullyProcessed.load();
     }
 }

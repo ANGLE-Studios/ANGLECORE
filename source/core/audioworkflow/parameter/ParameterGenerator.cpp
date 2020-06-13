@@ -47,7 +47,7 @@ namespace ANGLECORE
         /*
         * In case multiple requests are received before a new rendering session
         * begins, only the most recent will be processed. Therefore, the request
-        * queue need no more space than one slot.
+        * queue needs no more space than one slot.
         */
         m_requestQueue(1)
     {}

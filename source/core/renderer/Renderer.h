@@ -25,7 +25,7 @@
 #include <memory>
 #include <vector>
 
-#include "../audioworkflow/workflow/Workflow.h"
+#include "../audioworkflow/workflow/Worker.h"
 #include "../audioworkflow/voiceassigner/VoiceAssigner.h"
 #include "../../config/RenderingConfig.h"
 #include "../../dependencies/farbot/fifo.h"
@@ -46,9 +46,8 @@ namespace ANGLECORE
         * Creates a Renderer with an empty rendering sequence. The Renderer will not
         * be ready to render anything upon creation: it will wait to be initialized
         * with a ConnectionRequest.
-        * @param[in] workflow The Workflow to execute connection requests on
         */
-        Renderer(Workflow& workflow);
+        Renderer();
 
         /**
         * Renders the given number of samples. This method constitutes the kernel of
@@ -77,14 +76,20 @@ namespace ANGLECORE
         void turnVoiceOff(unsigned short voiceNumber);
 
         /**
-        * Pushes the given request to the request queue. This method uses move
-        * semantics, so it will take ownership of the pointer passed as argument. It
-        * will never be called by the real-time thread, and will only be called by
-        * the non real-time thread upon user request.
-        * @param[in] request The ConnectionRequest to post to the Renderer. It will
-        *   not be processed immediately, but before rendering the next audio block.
+        * Acquires the new rendering sequence and voice assignments from the given
+        * ConnectionRequest, as well as the increment vector. The request passed as
+        * argument must be valid, as this method will perform no validity check and
+        * take the ConnectionRequest's results from granted. This method uses move
+        * semantics, so it will take ownership of the vectors contained in the
+        * ConnectionRequest passed as argument. This method must only be called by
+        * the real-time thread.
+        * @param[in] request The ConnectionRequest to take the results from. It
+        *   should be a valid ConnectionRequest, i.e. it should respect the two
+        *   properties defined in the structure definition (the rendering sequence,
+        *   voice assignments and one increment vectors must all be of the same size
+        *   and must all be non empty).
         */
-        void postConnectionRequest(std::shared_ptr<ConnectionRequest>&& request);
+        void processConnectionRequest(ConnectionRequest& request);
 
     private:
 
@@ -94,12 +99,6 @@ namespace ANGLECORE
         * as it will be called by the real-time thread.
         */
         void updateIncrements();
-
-        /**
-        * The Workflow the Renderer is working with. When processing connection
-        * requests, this is the Workflow on which the request will be executed.
-        */
-        Workflow& m_workflow;
 
         /**
         * Boolean flag which signals when the rendering sequence and voice
@@ -146,14 +145,5 @@ namespace ANGLECORE
         * a new ConnectionRequest has been received.
         */
         bool m_shouldUpdateIncrements;
-
-        /** Queue for receiving connection requests. */
-        farbot::fifo<
-            std::shared_ptr<ConnectionRequest>,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
-        > m_connectionRequests;
     };
 }

@@ -30,7 +30,8 @@ namespace ANGLECORE
     AudioWorkflow::AudioWorkflow() :
         Workflow(),
         VoiceAssigner(),
-        m_exporter(std::make_shared<Exporter<float>>()),
+        Lockable(),
+        m_exporter(std::make_shared<Exporter>()),
         m_mixer(std::make_shared<Mixer>())
     {
         /*
@@ -71,20 +72,9 @@ namespace ANGLECORE
         * ===================================
         */
 
-        /* We add the global context's workers and streams */
-        addWorker(m_globalContext.sampleRateGenerator);
+        /* We add the global context's streams */
         addStream(m_globalContext.sampleRateStream);
-        addWorker(m_globalContext.sampleRateInverter);
         addStream(m_globalContext.sampleRateReciprocalStream);
-
-        /*
-        * Then we create the connections between the context's items. Note that, by
-        * construction of a GlobalContext, we know none of m_globalContext's member
-        * pointers are null, so we do not check for nullptr here:
-        */
-        plugWorkerIntoStream(m_globalContext.sampleRateGenerator->id, 0, m_globalContext.sampleRateStream->id);
-        plugStreamIntoWorker(m_globalContext.sampleRateStream->id, m_globalContext.sampleRateInverter->id, 0);
-        plugWorkerIntoStream(m_globalContext.sampleRateInverter->id, 0, m_globalContext.sampleRateReciprocalStream->id);
 
         /*
         * ===================================
@@ -128,12 +118,7 @@ namespace ANGLECORE
 
     void AudioWorkflow::setSampleRate(floating_type sampleRate)
     {
-        m_globalContext.sampleRateGenerator->setParameterValue(sampleRate);
-    }
-
-    std::mutex& AudioWorkflow::getLock()
-    {
-        return m_lock;
+        m_globalContext.setSampleRate(sampleRate);
     }
 
     std::vector<std::shared_ptr<Worker>> AudioWorkflow::buildRenderingSequence(const ConnectionPlan& connectionPlan) const
@@ -275,8 +260,9 @@ namespace ANGLECORE
         /* We first turn on the given voice */
         m_voices[voiceNumber].isOn = true;
 
-        /* And then send the information to the mixer */
+        /* And then send the information to the mixer and exporter */
         m_mixer->turnVoiceOn(voiceNumber);
+        m_exporter->incrementVoiceCount();
     }
 
     void AudioWorkflow::turnVoiceOffAndSetItFree(unsigned short voiceNumber)
@@ -284,8 +270,9 @@ namespace ANGLECORE
         /* We first turn off the given voice */
         m_voices[voiceNumber].isOn = false;
 
-        /* And then send the information to the mixer */
+        /* And then send the information to the mixer and exporter */
         m_mixer->turnVoiceOff(voiceNumber);
+        m_exporter->decrementVoiceCount();
 
         /* Afterwards, we set it free */
         m_voices[voiceNumber].isFree = true;
@@ -337,6 +324,43 @@ namespace ANGLECORE
                 voice.racks[i].instrument->reset();
                 voice.racks[i].instrument->startPlaying();
             }
+    }
+
+    void AudioWorkflow::turnRackOn(unsigned short rackNumber)
+    {
+        /*
+        * Before we turn the rack on for every voice, we need to check if a voice is
+        * already on. If that is the case, then we need to first wake up and prepare
+        * the rack's instrument through a reset and start up, so it will properly
+        * render audio once the rack is on.
+        */
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+        {
+            Voice& voice = m_voices[v];
+
+            /*
+            * We need to check if the instrument rack is empty before accessing the
+            * instrument (even though when a rack is turned on, it is most likely
+            * because a new instrument was added or an existing instrument is
+            * unmuted). Note that the rack's 'isEmpty' member variable is meant for
+            * detecting an empty rack that can be overriden, which does not imply
+            * that the underlying instrument pointer is null. Conversely, we will
+            * not take for granted that the pointer is not null when the rack is
+            * tagged as 'non empty', so we perform a double check:
+            */
+            if (voice.isOn && !voice.racks[rackNumber].isEmpty && voice.racks[rackNumber].instrument)
+            {
+                voice.racks[rackNumber].instrument->reset();
+                voice.racks[rackNumber].instrument->startPlaying();
+            }
+        }
+
+        m_mixer->turnRackOn(rackNumber);
+    }
+
+    void AudioWorkflow::turnRackOff(unsigned short rackNumber)
+    {
+        m_mixer->turnRackOff(rackNumber);
     }
 
     uint32_t AudioWorkflow::getMixerInputStreamID(unsigned short voiceNumber, unsigned short instrumentRackNumber, unsigned short channel) const
