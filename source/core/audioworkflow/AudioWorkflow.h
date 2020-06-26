@@ -25,6 +25,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <stdint.h>
 
 #include "workflow/Workflow.h"
 #include "voiceassigner/VoiceAssigner.h"
@@ -135,9 +136,9 @@ namespace ANGLECORE
         void takeVoiceAndPlayNote(unsigned short voiceNumber, unsigned char noteNumber, unsigned char noteVelocity);
 
         /**
-        * Returns true if the given Voice is playing the given \p noteNumber, and
-        * false otherwise. Note that \p voiceNumber is expected to be in-range, and
-        * that, consequently, no safety check will be performed by this method.
+        * Returns true if the given Voice is on and playing the given \p noteNumber,
+        * and false otherwise. Note that \p voiceNumber is expected to be in-range,
+        * and that, consequently, no safety check will be performed by this method.
         * @param[in] voiceNumber Voice to test.
         * @param[in] noteNumber Note to look for in the given Voice.
         */
@@ -156,6 +157,15 @@ namespace ANGLECORE
         * @param[in] rackNumber Rack to turn off.
         */
         void turnRackOff(unsigned short rackNumber);
+
+        /**
+        * Requests all the instruments contained in the given Voice to stop playing,
+        * and returns the Voice's audio tail duration in samples, which is the
+        * number of samples before the Voice begins to emit complete silence.
+        * This method must only be called by the real-time thread.
+        * @param[in] voiceNumber Voice that should stop playing.
+        */
+        uint32_t stopVoice(unsigned short voiceNumber);
 
     protected:
 

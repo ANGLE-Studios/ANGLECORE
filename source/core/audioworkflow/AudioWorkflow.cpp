@@ -280,7 +280,7 @@ namespace ANGLECORE
 
     bool AudioWorkflow::playsNoteNumber(unsigned short voiceNumber, unsigned char noteNumber) const
     {
-        return m_voices[voiceNumber].currentNoteNumber == noteNumber;
+        return m_voices[voiceNumber].isOn && m_voices[voiceNumber].currentNoteNumber == noteNumber;
     }
 
     void AudioWorkflow::takeVoiceAndPlayNote(unsigned short voiceNumber, unsigned char noteNumber, unsigned char noteVelocity)
@@ -321,6 +321,7 @@ namespace ANGLECORE
             */
             if (!voice.racks[i].isEmpty && voice.racks[i].instrument)
             {
+                voice.racks[i].instrument->turnOn();
                 voice.racks[i].instrument->reset();
                 voice.racks[i].instrument->startPlaying();
             }
@@ -350,6 +351,7 @@ namespace ANGLECORE
             */
             if (voice.isOn && !voice.racks[rackNumber].isEmpty && voice.racks[rackNumber].instrument)
             {
+                voice.racks[rackNumber].instrument->turnOn();
                 voice.racks[rackNumber].instrument->reset();
                 voice.racks[rackNumber].instrument->startPlaying();
             }
@@ -361,6 +363,62 @@ namespace ANGLECORE
     void AudioWorkflow::turnRackOff(unsigned short rackNumber)
     {
         m_mixer->turnRackOff(rackNumber);
+    }
+
+    uint32_t AudioWorkflow::stopVoice(unsigned short voiceNumber)
+    {
+        /* We first retrieve the voice that should be stopped */
+        Voice& voice = m_voices[voiceNumber];
+
+        /*
+        * The voice that must be stopped will generate an audio tail before being
+        * turned off. This method must return the time it will take for that voice
+        * to stop playing its audio tail, in terms of samples. Mathematically, the
+        * voice's stop duration is simply the maximum of all its racks' stop
+        * durations. We will use the following variable to compute this value:
+        */
+        uint32_t voiceStopDuration = 0;
+
+        /* We stop each rack and compute its stop duration */
+        for (unsigned short r = 0; r < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; r++)
+        {
+            /*
+            * We need to check if the instrument rack is empty before accessing the
+            * instrument. Note that the rack's 'isEmpty' member variable is meant
+            * for detecting an empty rack that can be overriden, which does not
+            * imply that the underlying instrument pointer is null. Conversely, we
+            * will not assume the pointer is not null when the rack is tagged as
+            * 'non empty', so we perform a double check:
+            */
+            if (!voice.racks[r].isEmpty && voice.racks[r].instrument)
+            {
+                /* We first compute the instrument's stop duration in samples */
+                uint32_t instrumentStopDuration = voice.racks[r].instrument->computeStopDurationInSamples();
+
+                /*
+                * The above 'instrumentStopDuration' variable currently stores the
+                * number of samples the instrument needs to fade out before silence.
+                * However, the instrument's configuration may change right here,
+                * after one of its input parameter has received a change request for
+                * instance. The 'instrumentStopDuration' variable may no longer
+                * correspond to the instrument's needs, but it is ok to discard this
+                * change once in a while: the instrument will take it into account
+                * when another note is released.
+                */
+
+                /*
+                * We now request the instrument to stop playing, and update our
+                * current evaluation of the voice's stop duration accordingly.
+                */
+                voice.racks[r].instrument->prepareToStop(instrumentStopDuration);
+                voice.racks[r].instrument->stopPlaying();
+                if (instrumentStopDuration > voiceStopDuration)
+                    voiceStopDuration = instrumentStopDuration;
+            }
+        }
+
+        /* Finally, we return the voice's tail duration we have just computed */
+        return voiceStopDuration;
     }
 
     uint32_t AudioWorkflow::getMixerInputStreamID(unsigned short voiceNumber, unsigned short instrumentRackNumber, unsigned short channel) const

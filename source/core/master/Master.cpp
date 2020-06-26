@@ -33,7 +33,14 @@ namespace ANGLECORE
         * there is no need to reserve more space than one slot.
         */
         m_instrumentRequests(1)
-    {}
+    {
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+        {
+            m_voiceIsStopping[v] = false;
+            m_stopTrackers[v].stopDurationInSamples = 0;
+            m_stopTrackers[v].position = 0;
+        }
+    }
 
     void Master::setSampleRate(floating_type sampleRate)
     {
@@ -54,7 +61,7 @@ namespace ANGLECORE
     {
         /*
         * ===================================
-        * STEP 1/2: PROCESS REQUESTS
+        * STEP 1/3: PROCESS REQUESTS
         * ===================================
         */
 
@@ -62,7 +69,7 @@ namespace ANGLECORE
 
         /*
         * ===================================
-        * STEP 2/2: RENDERING
+        * STEP 2/3: RENDERING
         * ===================================
         */
 
@@ -75,37 +82,7 @@ namespace ANGLECORE
         */
         if (numMIDIMessages == 0)
         {
-            /*
-            * Although we took a shortcut, we still need to fulfill the Master's
-            * responsability to only request a valid number of samples to the
-            * renderer. Therefore, we cut the audio block to generate into smaller
-            * chunks, using the same idea as the Euclidian division: we launch
-            * rendering sessions on blocks of size ANGLECORE_FIXED_STREAM_SIZE until
-            * we obtain one remainder, which size will consequently be between 0 and
-            * ANGLECORE_FIXED_STREAM_SIZE - 1.
-            */
-
-            uint32_t startSample = 0;
-            uint32_t remainingSamples = numSamples;
-            while (remainingSamples >= ANGLECORE_FIXED_STREAM_SIZE)
-            {
-                m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, startSample);
-                m_renderer.render(ANGLECORE_FIXED_STREAM_SIZE);
-                startSample += ANGLECORE_FIXED_STREAM_SIZE;
-                remainingSamples -= ANGLECORE_FIXED_STREAM_SIZE;
-            }
-
-            /*
-            * Now we are left with the remainder, but since we can only call the
-            * renderer if the number of samples to render is not null, we need to
-            * test whether or not the remainder is empty before launching a new
-            * rendering session:
-            */
-            if (remainingSamples != 0)
-            {
-                m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, startSample);
-                m_renderer.render(remainingSamples);
-            }
+            splitAndRenderNextAudioBlock(audioBlockToGenerate, numChannels, numSamples, 0);
         }
         else
         {
@@ -131,32 +108,7 @@ namespace ANGLECORE
                 {
                     uint32_t samplesBeforeNextMessage = message.timestamp - position;
 
-                    /*
-                    * To fulfill the Master's responsability to only request a valid
-                    * number of samples to the renderer, we cut the audio block to
-                    * generate into smaller chunks, using the same process as in the
-                    * shortcut above.
-                    */
-
-                    uint32_t startSample = position;
-                    uint32_t remainingSamples = samplesBeforeNextMessage;
-                    while (remainingSamples >= ANGLECORE_FIXED_STREAM_SIZE)
-                    {
-                        m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, startSample);
-                        m_renderer.render(ANGLECORE_FIXED_STREAM_SIZE);
-                        startSample += ANGLECORE_FIXED_STREAM_SIZE;
-                        remainingSamples -= ANGLECORE_FIXED_STREAM_SIZE;
-                    }
-
-                    /*
-                    * Since we cannot ask the renderer to render zero samples, we
-                    * add the same test here as in the shortcut above:
-                    */
-                    if (remainingSamples != 0)
-                    {
-                        m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, startSample);
-                        m_renderer.render(remainingSamples);
-                    }
+                    splitAndRenderNextAudioBlock(audioBlockToGenerate, numChannels, samplesBeforeNextMessage, position);
 
                     processMIDIMessage(message);
 
@@ -169,23 +121,65 @@ namespace ANGLECORE
             * we also know we have not rendered all the subsequent samples to the
             * end of the audio block (since this is always done before rendering the
             * upcoming MIDI message, as implemented above). So we need to call our
-            * renderer one last time, always in the same process.
+            * renderer one last time.
             */
 
-            uint32_t startSample = position;
-            uint32_t remainingSamples = numSamples - position;
+            splitAndRenderNextAudioBlock(audioBlockToGenerate, numChannels, numSamples - position, position);
+        }
+    }
+
+    void Master::splitAndRenderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample)
+    {
+        /*
+        * The purpose of this method is to fulfill the Master's responsability to
+        * only request a valid number of samples to the renderer. Since a valid
+        * number of samples is a number that is both greater than 0 and less than
+        * ANGLECORE_FIXED_STREAM_SIZE, we need to cut the audio block to generate
+        * into smaller chunks, using the same idea as the Euclidian division: we
+        * launch rendering sessions on blocks of size ANGLECORE_FIXED_STREAM_SIZE
+        * until we obtain one remainder, which size will consequently be between 0
+        * and ANGLECORE_FIXED_STREAM_SIZE - 1. This is what this method does, which
+        * ensures that the number of samples requested to the renderer is always
+        * less than ANGLECORE_FIXED_STREAM_SIZE. The method also ensures we never
+        * ask the renderer to generate 0 samples, which completes the requirements.
+        */
+
+        /*
+        * As stated above, we only call the renderer if the number of samples
+        * requested is greater than zero:
+        */
+        if (numSamples > 0)
+        {
+            uint32_t start = startSample;
+            uint32_t remainingSamples = numSamples;
             while (remainingSamples >= ANGLECORE_FIXED_STREAM_SIZE)
             {
-                m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, startSample);
+                m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, start);
                 m_renderer.render(ANGLECORE_FIXED_STREAM_SIZE);
-                startSample += ANGLECORE_FIXED_STREAM_SIZE;
+                start += ANGLECORE_FIXED_STREAM_SIZE;
                 remainingSamples -= ANGLECORE_FIXED_STREAM_SIZE;
             }
+
+            /*
+            * Now we are left with the remainder, but since we can only call the
+            * renderer if the number of samples to render is not null, we need to
+            * test whether or not the remainder is empty before launching a new
+            * rendering session:
+            */
             if (remainingSamples != 0)
             {
-                m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, startSample);
+                m_audioWorkflow.setExporterOutput(audioBlockToGenerate, numChannels, start);
                 m_renderer.render(remainingSamples);
             }
+
+            /*
+            * Finally, we update the stop trackers of the voices currently
+            * generating their audio tails before being turned off. Since we are in
+            * between two MIDI messages here, we can simply do this update once,
+            * instead of doing it after rendering each individual chunk for the same
+            * result.
+            */
+            updateStopTrackersAfterRendering(numSamples);
         }
     }
 
@@ -286,17 +280,93 @@ namespace ANGLECORE
 
         case MIDIMessage::Type::NOTE_OFF:
             {
-                // TO DO: For the moment, we simply and brutally turn the voice off.
+                /*
+                * We request all the voices that are currently playing the message's
+                * note to stop playing. Note that stopping the voices will not turn
+                * them off immediately in general: the instruments inside the voices
+                * will likely need some time to completely fade out, before the
+                * voice can be turned off. The purpose of the m_stopTrackers
+                * variable is precisely to track that time before turning the voices
+                * off.
+                */
                 for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
                 {
+                    /*
+                    * Note that the AudioWorkflow's playsNoteNumber() method returns
+                    * true when the given voice is on AND playing the note, so using
+                    * it will properly avoid voices that are off but were playing
+                    * the note before, which we do not want to stop again (primarily
+                    * because it will call the instruments'
+                    * computeStopDurationInSamples() and stopPlaying() methods in an
+                    * illegal order, before reset() and startPlaying() are called).
+                    */
                     if (m_audioWorkflow.playsNoteNumber(v, message.noteNumber))
                     {
-                        m_audioWorkflow.turnVoiceOffAndSetItFree(v);
-                        m_renderer.turnVoiceOff(v);
+                        /*
+                        * If the voice is on and playing the note that has been
+                        * released, then we need to stop the voice.
+                        */
+
+                        /*
+                        * We first register the voice as being in a stopping state:
+                        */
+                        m_voiceIsStopping[v] = true;
+
+                        /*
+                        * And then we effectively stop the voice. To do that, we
+                        * call the AudioWorkflow's stopVoice() method which stops
+                        * the given voice, and returns number of samples that the
+                        * voice needs to complete its fade out properly.
+                        */
+                        uint32_t voiceStopDuration = m_audioWorkflow.stopVoice(v);
+
+                        /*
+                        * We finally use that value to initialize the voice's stop
+                        * tracker.
+                        */
+                        m_stopTrackers[v].stopDurationInSamples = voiceStopDuration;
+                        m_stopTrackers[v].position = 0;
                     }
                 }
             }
             break;
+        }
+    }
+
+    void Master::updateStopTrackersAfterRendering(uint32_t numSamples)
+    {
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+        {
+            if (m_voiceIsStopping[v])
+            {
+                /*
+                * We first retrieve the stop tracker corresponding to the current
+                * voice:
+                */
+                StopTracker& stopTracker = m_stopTrackers[v];
+
+                /*
+                * We start by updating the tracker's position. We assume the voice
+                * tails are always short enough so that the tracker's position will
+                * never overflow.
+                */
+                stopTracker.position += numSamples;
+
+                if (stopTracker.position >= stopTracker.stopDurationInSamples)
+                {
+                    /* We turn off the current voice */
+                    m_audioWorkflow.turnVoiceOffAndSetItFree(v);
+                    m_renderer.turnVoiceOff(v);
+
+                    /*
+                    * And we save the information that the voice is no longer in its
+                    * stopping state, which means it no longer generates its tail,
+                    * in order to stop the Master from further updating the voice's
+                    * tracker.
+                    */
+                    m_voiceIsStopping[v] = false;
+                }
+            }
         }
     }
 }
