@@ -95,6 +95,7 @@ namespace ANGLECORE
             addStream(voiceContext.frequencyStream);
             addWorker(voiceContext.ratioCalculator);
             addStream(voiceContext.frequencyOverSampleRateStream);
+            addStream(voiceContext.velocityStream);
 
             /*
             * And we properly assign the workers to the current voice. Note that, by
@@ -295,14 +296,19 @@ namespace ANGLECORE
         voice.isFree = false;
 
         /*
-        * Then we send the note to voice, which includes sending the note number,
-        * the corresponding frequency, and the velocity.
+        * Then we send the note to the voice, which includes sending the note
+        * number, the corresponding frequency, and the velocity.
         */
+
         voice.currentNoteNumber = noteNumber;
         voice.voiceContext.frequencyGenerator->setParameterValue(MIDI::getFrequencyOf(noteNumber));
 
-        // TO DO: remove the "currentNoteVelocityAttribute" and fill the stream instead
-        voice.currentNoteVelocity = noteVelocity;
+        /*
+        * For the velocity, since it is a discrete parameter, we simply write its
+        * value into the first sample of the voice context's corresponding stream:
+        */
+        floating_type* velocity = voice.voiceContext.velocityStream->getDataForWriting();
+        velocity[0] = static_cast<floating_type>(noteVelocity);
 
         /*
         * Finally, we reset every instrument located in the voice so that they get

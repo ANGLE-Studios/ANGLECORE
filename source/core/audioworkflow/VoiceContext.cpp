@@ -60,9 +60,7 @@ namespace ANGLECORE
         * ANGLECORE_EPSILON to ensure it is never negative, nor equal to zero (just
         * to be on the safe side).
         */
-        frequency(ANGLECORE_FREQUENCY_PARAMETER_ID, ANGLECORE_EPSILON, ANGLECORE_EPSILON, ANGLECORE_MAX_SAMPLE_RATE, Parameter::SmoothingMethod::MULTIPLICATIVE, false, 0),
-
-        velocity(ANGLECORE_VELOCITY_PARAMETER_ID, 0.0, 0.0, 1.0, Parameter::SmoothingMethod::ADDITIVE, false, 0)
+        frequency(ANGLECORE_FREQUENCY_PARAMETER_ID, ANGLECORE_EPSILON, ANGLECORE_EPSILON, ANGLECORE_MAX_SAMPLE_RATE, Parameter::SmoothingMethod::MULTIPLICATIVE, false, 0)
     {
         frequencyGenerator = std::make_shared<ParameterGenerator>(frequency);
         frequencyStream = std::make_shared<Stream>();

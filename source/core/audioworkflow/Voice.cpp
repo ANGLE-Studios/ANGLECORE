@@ -27,8 +27,7 @@ namespace ANGLECORE
     Voice::Voice() :
         isFree(true),
         isOn(false),
-        currentNoteNumber(0),
-        currentNoteVelocity(0)
+        currentNoteNumber(0)
     {
         /*
         * The racks are all empty by default, so they should not contain any

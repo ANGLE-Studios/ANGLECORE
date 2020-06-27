@@ -52,7 +52,6 @@ namespace ANGLECORE
         bool isFree;
         bool isOn;
         unsigned char currentNoteNumber;
-        unsigned char currentNoteVelocity;
 
         /**
         * Each Voice has its own context, called a VoiceContext. A VoiceContext is a

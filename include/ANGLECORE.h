@@ -1556,7 +1556,6 @@ namespace ANGLECORE
         std::shared_ptr<RatioCalculator> ratioCalculator;
         std::shared_ptr<Stream> frequencyOverSampleRateStream;
 
-        Parameter velocity;
         std::shared_ptr<Stream> velocityStream;
 
         /**
@@ -1590,7 +1589,6 @@ namespace ANGLECORE
         bool isFree;
         bool isOn;
         unsigned char currentNoteNumber;
-        unsigned char currentNoteVelocity;
 
         /**
         * Each Voice has its own context, called a VoiceContext. A VoiceContext is a
