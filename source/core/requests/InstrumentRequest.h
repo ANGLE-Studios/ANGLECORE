@@ -25,6 +25,7 @@
 #include <memory>
 
 #include "ConnectionRequest.h"
+#include "../audioworkflow/ParameterRegistrationPlan.h"
 
 namespace ANGLECORE
 {
@@ -33,8 +34,9 @@ namespace ANGLECORE
     * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
     * an instance of this structure is created to request the Mixer of the
     * AudioWorkflow to either activate or deactivate the corresponding rack for its
-    * mixing process, and to create or remove the necessary connections within the
-    * AudioWorkflow.
+    * mixing process, to create or remove the necessary connections within the
+    * AudioWorkflow, and to add or remove entries from the corresponding
+    * ParameterRegister.
     */
     struct InstrumentRequest
     {
@@ -49,11 +51,18 @@ namespace ANGLECORE
         unsigned short rackNumber;
 
         /**
-        * ConnectionRequest that matches the InstrumentRequest, and which instructs
+        * ConnectionRequest that matches the InstrumentRequest, and that instructs
         * to add or remove connections from the AudioWorkflow the Instrument will be
         * inserted into or removed from.
         */
         ConnectionRequest connectionRequest;
+
+        /**
+        * ParameterRegistrationPlan that matches the InstrumentRequest, and that
+        * instructs to add or remove entries from the ParameterRegister of the
+        * AudioWorkflow the Instrument will be inserted into or removed from.
+        */
+        ParameterRegistrationPlan parameterRegistrationPlan;
 
         /**
         * Creates an InstrumentRequest.

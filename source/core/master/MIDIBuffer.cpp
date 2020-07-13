@@ -34,7 +34,8 @@ namespace ANGLECORE
     MIDIMessage::MIDIMessage() :
         type(Type::NONE),
         timestamp(0),
-        noteNumber(0)
+        noteNumber(0),
+        noteVelocity(0)
     {}
 
     /* MIDIBuffer

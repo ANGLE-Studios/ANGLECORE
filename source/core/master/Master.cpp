@@ -23,6 +23,7 @@
 #include "Master.h"
 
 #include "../../config/RenderingConfig.h"
+#include "../audioworkflow/parameter/ParameterGenerator.h"
 
 namespace ANGLECORE
 {
@@ -55,6 +56,98 @@ namespace ANGLECORE
     MIDIMessage& Master::pushBackNewMIDIMessage()
     {
         return m_midiBuffer.pushBackNewMIDIMessage();
+    }
+
+    void Master::setParameterValue(unsigned short rackNumber, StringView parameterIdentifier, floating_type newParameterValue)
+    {
+        /*
+        * This method must return without performing any task if rackNumber is
+        * out-of-range.
+        */
+        if (rackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+            return;
+
+        /*
+        * We try to retrieve the parameter generator corresponding to the given
+        * parameter:
+        */
+        std::shared_ptr<ParameterGenerator> generator = m_audioWorkflow.findParameterGenerator(rackNumber, parameterIdentifier);
+
+        /*
+        * If the pointer returned by the instruction above is not null, then it
+        * means that the parameter was found in one of the AudioWorkflow's parameter
+        * register (the one corresponding to the given rackNumber), and so we can
+        * post a new parameter change request to the corresponding parameter
+        * generator we have just retrieved.
+        */
+        if (generator)
+        {
+            /*
+            * We create a new parameter change request with the new value that is
+            * requested:
+            */
+            std::shared_ptr<ParameterChangeRequest> request = std::make_shared<ParameterChangeRequest>();
+            request->newValue = newParameterValue;
+            request->durationInSamples = 0;
+
+            /*
+            * Finally, we need to send the ParameterChangeRequest to the real-time
+            * thread. To avoid any memory deallocation by the real-time thread after
+            * it is done with the request, we do not pass the request straight to
+            * it. Instead, we create a copy and send that copy to the real-time
+            * thread. Therefore, when it is done with the request, it will only
+            * delete a copy of a shared pointer and decrement its reference count by
+            * one, signaling the request has been processed by the parameter
+            * generator, and that it can be safely destroyed by the non real-time
+            * thread that created it.
+            */
+
+            /* We copy the ParameterChangeRequest... */
+            std::shared_ptr<ParameterChangeRequest> requestCopy = request;
+
+            /* And we send it to the parameter generator */
+            generator->postParameterChangeRequest(std::move(requestCopy));
+
+            /*
+            * From now on, the ParameterChangeRequest is in the hands of the
+            * real-time thread. We cannot access any member of 'request'. We will
+            * still use the reference count of the shared pointer as an indicator of
+            * when the real-time thread is done with the request (although it is not
+            * guaranteed to be safe by the standard). As long as that number is
+            * greater than 1 (and, normally, equal to 2), the real-time thread is
+            * still in possession of the copy, and possibly processing it. So the
+            * non real-time thread should wait. When this number reaches 1, it means
+            * the real-time thread is done with the request and the non real-time
+            * thread can safely delete it.
+            */
+
+            /*
+            * To avoid infinite loops and therefore deadlocks while waiting for the
+            * real-time thread, we introduce a timeout, using a number of attempts.
+            */
+            const unsigned short timeoutAttempts = 0;
+            unsigned short attempt = 0;
+
+            /*
+            * We then wait for the real-time thread to finish, or for when we reach
+            * the timeout.
+            */
+            while (request.use_count() > 1 && attempt++ < timeoutAttempts)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+            /*
+            * Once here, we either reached the timeout, or the copy of the
+            * ParameterChangeRequest has been destroyed, and only the original
+            * remains, and can be safely deleted. In any case, the original request
+            * will be deleted, so if the timeout is the reason for leaving the loop,
+            * then the copy will outlive the original request in the real-time
+            * thread, which will trigger memory deallocation upon destruction, and
+            * possibly provoke an audio glitch (this should actually be very rare).
+            * If we left the loop because the copy was destroyed (which is the
+            * common case), then the original will be safely deleted here by the non
+            * real-time thread.
+            */
+        }
     }
 
     void Master::renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples)
@@ -185,6 +278,12 @@ namespace ANGLECORE
 
     void Master::processRequests()
     {
+        /*
+        * ===================================
+        * STEP 1/1: INSTRUMENT REQUESTS
+        * ===================================
+        */
+
         {
             /*
             * We define a scope here so that the following pointer is deleted as
@@ -240,6 +339,18 @@ namespace ANGLECORE
                     */
                     m_renderer.processConnectionRequest(connectionRequest);
                 }
+
+                /*
+                * Then, we ask the AudioWorkflow to execute the parameter
+                * registration plan corresponding to the current request. This will
+                * cause the AudioWorkflow to either add some parameters to its
+                * registers, so that the end-user can then change their value
+                * through parameter change requests, or to remove some from its
+                * registers, to precisely stop routing these requests and prepare to
+                * remove those parameters and their associated workflow items
+                * entirely.
+                */
+                m_audioWorkflow.executeParameterRegistrationPlan(request->parameterRegistrationPlan);
             }
         }
     }

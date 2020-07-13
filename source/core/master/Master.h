@@ -35,6 +35,7 @@
 #include "../../config/RenderingConfig.h"
 #include "../../config/AudioConfig.h"
 #include "../requests/InstrumentRequest.h"
+#include "../../utility/StringView.h"
 
 namespace ANGLECORE
 {
@@ -67,6 +68,22 @@ namespace ANGLECORE
         * real-time thread, right before calling the renderNextAudioBlock() method.
         */
         MIDIMessage& pushBackNewMIDIMessage();
+
+        /**
+        * Requests the Master to change one Parameter's value within the Instrument
+        * positioned at the rack number \p rackNumber. Note that this does not mean
+        * the request will take effect immediately: the Master will post the request
+        * to the real-time thread to be taken care of in the next rendering session.
+        * @param[in] rackNumber The Instrument's rack number. If this number is not
+        *   valid, this method will have no effect.
+        * @param[in] parameterIdentifier The Parameter's identifier. This can be
+        *   passed in as a C string, as it will be implicitely converted into a
+        *   StringView. If this parameter does not correspond to any parameter of
+        *   the Instrument located at \p rackNumber, then this method will have no
+        *   effect.
+        * @param[in] newParameterValue The Parameter's new value.
+        */
+        void setParameterValue(unsigned short rackNumber, StringView parameterIdentifier, floating_type newParameterValue);
 
         /**
         * Renders the next audio block, using the internal MIDIBuffer as a source
@@ -178,7 +195,8 @@ namespace ANGLECORE
 
         std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
         ConnectionRequest& connectionRequest = request->connectionRequest;
-        ConnectionPlan& plan = connectionRequest.plan;
+        ConnectionPlan& connectionPlan = connectionRequest.plan;
+        ParameterRegistrationPlan& parameterRegistrationPlan = request->parameterRegistrationPlan;
 
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
@@ -192,21 +210,21 @@ namespace ANGLECORE
             * Then, we insert the Instrument into the Workflow and plan its bridging
             * to the real-time rendering pipeline.
             */
-            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
+            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, connectionPlan, parameterRegistrationPlan);
         }
 
         /*
-        * Once here, we have a ConnectionPlan ready to be used in our
-        * ConnectionRequest. We now need to precompute the consequences of executing
-        * than plan and connecting all of the instruments to the AudioWorkflow's
-        * real-time rendering pipeline.
+        * Once here, we have a ConnectionPlan and a ParameterRegisterPlan ready to
+        * be used in our InstrumentRequest. We now need to precompute the
+        * consequences of executing the ConnectionPlan and connecting all of the
+        * instruments to the AudioWorkflow's real-time rendering pipeline.
         */
 
         /*
         * We first calculate the rendering sequence that will take effect right
-        * after the plan is executed.
+        * after the connection plan is executed.
         */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(plan);
+        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(connectionPlan);
 
         /*
         * And from that sequence, we can precompute and assign the rest of the
@@ -253,8 +271,8 @@ namespace ANGLECORE
         unsigned short attempt = 0;
 
         /*
-        * We then wait for the real-time thread to finish, or for the timeout to
-        * arise.
+        * We then wait for the real-time thread to finish, or for when we reach the
+        * timeout.
         */
         while (request.use_count() > 1 && attempt++ < timeoutAttempts)
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -264,10 +282,10 @@ namespace ANGLECORE
         * InstrumentRequest has been destroyed, and only the original remains, and
         * can be safely deleted. In any case, the original request will be deleted,
         * so if the timeout is the reason for leaving the loop, then the copy will
-        * outlive the original in the real-time thread, which will trigger memory
-        * deallocation upon destruction, and possibly provoke an audio glitch (this
-        * should actually be very rare). If we left the loop because the copy was
-        * destroyed (which is the common case), then the original will be safely
+        * outlive the original request in the real-time thread, which will trigger
+        * memory deallocation upon destruction, and possibly provoke an audio glitch
+        * (this should actually be very rare). If we left the loop because the copy
+        * was destroyed (which is the common case), then the original will be safely
         * deleted here by the non real-time thread.
         */
 

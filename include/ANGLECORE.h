@@ -848,7 +848,7 @@ namespace ANGLECORE
         * plug() and unplug() methods instead of the executeConnectionInstruction()
         * methods to save up one callback layer.
         * @param[in] plan The ConnectionPlan to execute. It should refer to existing
-        *   elements in the Workflow, as the execution will partially fail
+        *   elements in the Workflow, as the execution will at least partially fail
         *   otherwise.
         */
         bool executeConnectionPlan(const ConnectionPlan& plan);
@@ -1284,6 +1284,99 @@ namespace ANGLECORE
     };
 
     /**
+    * \class ParameterRegister ParameterRegister.h
+    * The goal of a ParameterRegister is to track which workflow items are involved
+    * in the generation of a Parameter. It maps a Parameter with its corresponding
+    * ParameterGenerator and with the Stream the generator will write into, which
+    * provides a more direct access to the Parameter's values.
+    */
+    class ParameterRegister
+    {
+    public:
+
+        /**
+        * \struct Entry ParameterRegister.h
+        * Element stored in the ParameterRegister that contains the
+        * ParameterGenerator and Stream corresponding to a particular Parameter.
+        */
+        struct Entry
+        {
+            std::shared_ptr<ParameterGenerator> generator;
+            std::shared_ptr<Stream> stream;
+        };
+
+        /**
+        * Stores the given Entry into the register. Note that this method must only
+        * be called by the real-time thread to execute a ParameterRegistrationPlan.
+        * It should not be called by the non real-time thread, since the real-time
+        * thread may be using the register to dispatch parameter change requests in
+        * the meantime.
+        * @param[in] parameterIdentifier The Parameter's identifier.
+        * @param[in] entryToInsert The ParameterGenerator and Stream that correspond
+        *   to the Parameter identified by \p parameterIdentifier.
+        */
+        void insert(StringView parameterIdentifier, const Entry& entryToInsert);
+
+        /**
+        * Searches for the given Parameter in the register. If the Parameter is
+        * found, then the corresponding Entry is returned. Otherwise, this method
+        * will return an Entry with empty pointers.
+        * @param[in] parameterIdentifier The Parameter's identifier.
+        */
+        Entry find(StringView parameterIdentifier) const;
+
+        /**
+        * Removes any Entry that matches the given Parameter from the register. Note
+        * that this method must only be called by the real-time thread to execute a
+        * ParameterRegistrationPlan. It should not be called by the non real-time
+        * thread, since the real-time thread may be using the register to dispatch
+        * parameter change requests in the meantime. Also note that this method
+        * deletes the shared pointers that were contained in the register after
+        * removing them. It is the responsibility of the Master to retrieve a copy
+        * of those pointers first, and then pass the copies to the non real-time
+        * thread for deletion, so that the real-time thread does not deallocate any
+        * memory.
+        * @param[in] parameterIdentifier The Parameter's identifier.
+        */
+        void remove(StringView parameterIdentifier);
+
+    private:
+        std::unordered_map<StringView, Entry> m_data;
+    };
+
+    /**
+    * \struct ParameterRegistrationPlan ParameterRegistrationPlan.h
+    * When the end-user asks to add an Instrument to an AudioWorkflow or to remove
+    * one from it, an instance of this structure is created to plan an update of its
+    * parameter registers.
+    */
+    struct ParameterRegistrationPlan
+    {
+        /**
+        * \struct Instruction ParameterRegistrationPlan.h
+        * Contains all the details of a specific entry to either add to or remove
+        * from the ParameterRegister.
+        */
+        struct Instruction
+        {
+            unsigned short rackNumber;
+            StringView parameterIdentifier;
+            std::shared_ptr<ParameterGenerator> parameterGenerator;
+            std::shared_ptr<Stream> parameterStream;
+
+            Instruction(unsigned short rackNumber, StringView parameterIdentifier, std::shared_ptr<ParameterGenerator> parameterGenerator, std::shared_ptr<Stream> parameterStream) :
+                rackNumber(rackNumber),
+                parameterIdentifier(parameterIdentifier),
+                parameterGenerator(parameterGenerator),
+                parameterStream(parameterStream)
+            {}
+        };
+
+        std::vector<Instruction> removeInstructions;
+        std::vector<Instruction> addInstructions;
+    };
+
+    /**
     * \struct GlobalContext GlobalContext.h
     * Set of streams which provide useful information, such as the sample rate the
     * audio should be rendered into, in a centralized spot, shared by the rest of
@@ -1652,8 +1745,10 @@ namespace ANGLECORE
 
         /**
         * Adds an Instrument to the given Voice, at the given \p rackNumber, then
-        * build the Instrument's Environment and plan its bridging to the real-time
-        * rendering pipeline by completing the given \p planToComplete. Note that
+        * build the Instrument's environment, plan its bridging to the real-time
+        * rendering pipeline by completing the given \p connectionPlanToComplete,
+        * and complete the \p parameterRegistrationPlan to add new parameters to the
+        * appropriate ParameterRegister if they were not already there. Note that
         * every parameter is expected to be in-range and valid, and that no safety
         * check will be performed by this method.
         * @param[in] voiceNumber Voice to place the Instrument in.
@@ -1661,10 +1756,12 @@ namespace ANGLECORE
         *   voice.
         * @param[in] instrument The Instrument to insert. It should not be a null
         *   pointer.
-        * @param[out] planToComplete The ConnectionPlan to complete with bridging
-        *   instructions.
+        * @param[out] connectionPlanToComplete The ConnectionPlan to complete with
+        *   bridging instructions.
+        * @param[in, out] parameterRegistrationPlan The ParameterRegistrationPlan to
+        *   use as is or complete with other registration instructions.
         */
-        void addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& planToComplete);
+        void addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& connectionPlanToComplete, ParameterRegistrationPlan& parameterRegistrationPlan);
 
         /**
         * Tries to find a Voice that is free, i.e. not currently playing anything,
@@ -1732,6 +1829,33 @@ namespace ANGLECORE
         */
         uint32_t stopVoice(unsigned short voiceNumber);
 
+        /**
+        * Executes the given \p plan, and adds or removes entries from the
+        * AudioWorkflow's parameter registers as instructed. This method needs to be
+        * fast as it might be called by the real-time thread at the beginning of any
+        * rendering session. Note that the plan passed in as argument may be altered
+        * when executed, as the AudioWorkflow will move some shared pointers around.
+        * @param[in] plan The ParameterRegistrationPlan to execute.
+        */
+        void executeParameterRegistrationPlan(ParameterRegistrationPlan& plan);
+
+        /**
+        * Tries to find the ParameterGenerator corresponding to the given Parameter.
+        * The AudioWorkflow will search through the parameters that are registered
+        * for the given \p rackNumber and look for a matching identifier. If one is
+        * found, this method will return the associated ParameterGenerator.
+        * Otherwise, this method will return a null pointer. Note that the rack
+        * number is expected to be in-range, as no safety check will be performed by
+        * this method.
+        * @param[in] rackNumber The Rack number. It must be in-range.
+        * @param[in] parameterIdentifier The Parameter's identifier. This can be
+        *   passed in as a C string, as it will be implicitely converted into a
+        *   StringView. If this parameter does not correspond to any parameter of
+        *   the Instrument located at \p rackNumber, then this method will return a
+        *   null pointer.
+        */
+        std::shared_ptr<ParameterGenerator> findParameterGenerator(unsigned short rackNumber, StringView parameterIdentifier);
+
     protected:
 
         /**
@@ -1786,6 +1910,7 @@ namespace ANGLECORE
         std::shared_ptr<Mixer> m_mixer;
         Voice m_voices[ANGLECORE_NUM_VOICES];
         GlobalContext m_globalContext;
+        ParameterRegister m_parameterRegisters[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
     };
 
 
@@ -2038,8 +2163,9 @@ namespace ANGLECORE
     * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
     * an instance of this structure is created to request the Mixer of the
     * AudioWorkflow to either activate or deactivate the corresponding rack for its
-    * mixing process, and to create or remove the necessary connections within the
-    * AudioWorkflow.
+    * mixing process, to create or remove the necessary connections within the
+    * AudioWorkflow, and to add or remove entries from the corresponding
+    * ParameterRegister.
     */
     struct InstrumentRequest
     {
@@ -2054,11 +2180,18 @@ namespace ANGLECORE
         unsigned short rackNumber;
 
         /**
-        * ConnectionRequest that matches the InstrumentRequest, and which instructs
+        * ConnectionRequest that matches the InstrumentRequest, and that instructs
         * to add or remove connections from the AudioWorkflow the Instrument will be
         * inserted into or removed from.
         */
         ConnectionRequest connectionRequest;
+
+        /**
+        * ParameterRegistrationPlan that matches the InstrumentRequest, and that
+        * instructs to add or remove entries from the ParameterRegister of the
+        * AudioWorkflow the Instrument will be inserted into or removed from.
+        */
+        ParameterRegistrationPlan parameterRegistrationPlan;
 
         /**
         * Creates an InstrumentRequest.
@@ -2095,6 +2228,22 @@ namespace ANGLECORE
         * real-time thread, right before calling the renderNextAudioBlock() method.
         */
         MIDIMessage& pushBackNewMIDIMessage();
+
+        /**
+        * Requests the Master to change one Parameter's value within the Instrument
+        * positioned at the rack number \p rackNumber. Note that this does not mean
+        * the request will take effect immediately: the Master will post the request
+        * to the real-time thread to be taken care of in the next rendering session.
+        * @param[in] rackNumber The Instrument's rack number. If this number is not
+        *   valid, this method will have no effect.
+        * @param[in] parameterIdentifier The Parameter's identifier. This can be
+        *   passed in as a C string, as it will be implicitely converted into a
+        *   StringView. If this parameter does not correspond to any parameter of
+        *   the Instrument located at \p rackNumber, then this method will have no
+        *   effect.
+        * @param[in] newParameterValue The Parameter's new value.
+        */
+        void setParameterValue(unsigned short rackNumber, StringView parameterIdentifier, floating_type newParameterValue);
 
         /**
         * Renders the next audio block, using the internal MIDIBuffer as a source
@@ -2206,7 +2355,8 @@ namespace ANGLECORE
 
         std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
         ConnectionRequest& connectionRequest = request->connectionRequest;
-        ConnectionPlan& plan = connectionRequest.plan;
+        ConnectionPlan& connectionPlan = connectionRequest.plan;
+        ParameterRegistrationPlan& parameterRegistrationPlan = request->parameterRegistrationPlan;
 
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
@@ -2220,21 +2370,21 @@ namespace ANGLECORE
             * Then, we insert the Instrument into the Workflow and plan its bridging
             * to the real-time rendering pipeline.
             */
-            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, plan);
+            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, connectionPlan, parameterRegistrationPlan);
         }
 
         /*
-        * Once here, we have a ConnectionPlan ready to be used in our
-        * ConnectionRequest. We now need to precompute the consequences of executing
-        * than plan and connecting all of the instruments to the AudioWorkflow's
-        * real-time rendering pipeline.
+        * Once here, we have a ConnectionPlan and a ParameterRegisterPlan ready to
+        * be used in our InstrumentRequest. We now need to precompute the
+        * consequences of executing the ConnectionPlan and connecting all of the
+        * instruments to the AudioWorkflow's real-time rendering pipeline.
         */
 
         /*
         * We first calculate the rendering sequence that will take effect right
-        * after the plan is executed.
+        * after the connection plan is executed.
         */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(plan);
+        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(connectionPlan);
 
         /*
         * And from that sequence, we can precompute and assign the rest of the
@@ -2281,8 +2431,8 @@ namespace ANGLECORE
         unsigned short attempt = 0;
 
         /*
-        * We then wait for the real-time thread to finish, or for the timeout to
-        * arise.
+        * We then wait for the real-time thread to finish, or for when we reach the
+        * timeout.
         */
         while (request.use_count() > 1 && attempt++ < timeoutAttempts)
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -2292,10 +2442,10 @@ namespace ANGLECORE
         * InstrumentRequest has been destroyed, and only the original remains, and
         * can be safely deleted. In any case, the original request will be deleted,
         * so if the timeout is the reason for leaving the loop, then the copy will
-        * outlive the original in the real-time thread, which will trigger memory
-        * deallocation upon destruction, and possibly provoke an audio glitch (this
-        * should actually be very rare). If we left the loop because the copy was
-        * destroyed (which is the common case), then the original will be safely
+        * outlive the original request in the real-time thread, which will trigger
+        * memory deallocation upon destruction, and possibly provoke an audio glitch
+        * (this should actually be very rare). If we left the loop because the copy
+        * was destroyed (which is the common case), then the original will be safely
         * deleted here by the non real-time thread.
         */
 

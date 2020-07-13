@@ -24,8 +24,8 @@
 
 #include <memory>
 #include <vector>
-#include <unordered_map>
 #include <stdint.h>
+#include <unordered_map>
 
 #include "workflow/Workflow.h"
 #include "voiceassigner/VoiceAssigner.h"
@@ -36,6 +36,9 @@
 #include "Voice.h"
 #include "GlobalContext.h"
 #include "instrument/Instrument.h"
+#include "ParameterRegister.h"
+#include "ParameterRegistrationPlan.h"
+#include "parameter/ParameterGenerator.h"
 
 namespace ANGLECORE
 {
@@ -87,8 +90,10 @@ namespace ANGLECORE
 
         /**
         * Adds an Instrument to the given Voice, at the given \p rackNumber, then
-        * build the Instrument's Environment and plan its bridging to the real-time
-        * rendering pipeline by completing the given \p planToComplete. Note that
+        * build the Instrument's environment, plan its bridging to the real-time
+        * rendering pipeline by completing the given \p connectionPlanToComplete,
+        * and complete the \p parameterRegistrationPlan to add new parameters to the
+        * appropriate ParameterRegister if they were not already there. Note that
         * every parameter is expected to be in-range and valid, and that no safety
         * check will be performed by this method.
         * @param[in] voiceNumber Voice to place the Instrument in.
@@ -96,10 +101,12 @@ namespace ANGLECORE
         *   voice.
         * @param[in] instrument The Instrument to insert. It should not be a null
         *   pointer.
-        * @param[out] planToComplete The ConnectionPlan to complete with bridging
-        *   instructions.
+        * @param[out] connectionPlanToComplete The ConnectionPlan to complete with
+        *   bridging instructions.
+        * @param[in, out] parameterRegistrationPlan The ParameterRegistrationPlan to
+        *   use as is or complete with other registration instructions.
         */
-        void addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& planToComplete);
+        void addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& connectionPlanToComplete, ParameterRegistrationPlan& parameterRegistrationPlan);
 
         /**
         * Tries to find a Voice that is free, i.e. not currently playing anything,
@@ -167,6 +174,33 @@ namespace ANGLECORE
         */
         uint32_t stopVoice(unsigned short voiceNumber);
 
+        /**
+        * Executes the given \p plan, and adds or removes entries from the
+        * AudioWorkflow's parameter registers as instructed. This method needs to be
+        * fast as it might be called by the real-time thread at the beginning of any
+        * rendering session. Note that the plan passed in as argument may be altered
+        * when executed, as the AudioWorkflow will move some shared pointers around.
+        * @param[in] plan The ParameterRegistrationPlan to execute.
+        */
+        void executeParameterRegistrationPlan(ParameterRegistrationPlan& plan);
+
+        /**
+        * Tries to find the ParameterGenerator corresponding to the given Parameter.
+        * The AudioWorkflow will search through the parameters that are registered
+        * for the given \p rackNumber and look for a matching identifier. If one is
+        * found, this method will return the associated ParameterGenerator.
+        * Otherwise, this method will return a null pointer. Note that the rack
+        * number is expected to be in-range, as no safety check will be performed by
+        * this method.
+        * @param[in] rackNumber The Rack number. It must be in-range.
+        * @param[in] parameterIdentifier The Parameter's identifier. This can be
+        *   passed in as a C string, as it will be implicitely converted into a
+        *   StringView. If this parameter does not correspond to any parameter of
+        *   the Instrument located at \p rackNumber, then this method will return a
+        *   null pointer.
+        */
+        std::shared_ptr<ParameterGenerator> findParameterGenerator(unsigned short rackNumber, StringView parameterIdentifier);
+
     protected:
 
         /**
@@ -221,5 +255,6 @@ namespace ANGLECORE
         std::shared_ptr<Mixer> m_mixer;
         Voice m_voices[ANGLECORE_NUM_VOICES];
         GlobalContext m_globalContext;
+        ParameterRegister m_parameterRegisters[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
     };
 }

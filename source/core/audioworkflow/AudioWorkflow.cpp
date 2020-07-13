@@ -20,6 +20,8 @@
 **
 **********************************************************************/
 
+#include <algorithm>
+
 #include "AudioWorkflow.h"
 
 #include "../../config/AudioConfig.h"
@@ -165,7 +167,7 @@ namespace ANGLECORE
         return ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE;
     }
 
-    void AudioWorkflow::addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& planToComplete)
+    void AudioWorkflow::addInstrumentAndPlanBridging(unsigned short voiceNumber, unsigned short rackNumber, const std::shared_ptr<Instrument>& instrument, ConnectionPlan& connectionPlanToComplete, ParameterRegistrationPlan& parameterRegistrationPlan)
     {
         /* We first add the instrument to the workflow... */
         addWorker(instrument);
@@ -182,15 +184,15 @@ namespace ANGLECORE
         */
         const Instrument::ContextConfiguration& configuration = instrument->getContextConfiguration();
         if (configuration.receiveSampleRate)
-            planToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateStreamID(), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::SAMPLE_RATE));
+            connectionPlanToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateStreamID(), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::SAMPLE_RATE));
         if (configuration.receiveSampleRateReciprocal)
-            planToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateReciprocalStreamID(), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::SAMPLE_RATE_RECIPROCAL));
+            connectionPlanToComplete.streamToWorkerPlugInstructions.emplace_back(getSampleRateReciprocalStreamID(), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::SAMPLE_RATE_RECIPROCAL));
         if (configuration.receiveFrequency)
-            planToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::FREQUENCY));
+            connectionPlanToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::FREQUENCY));
         if (configuration.receiveFrequencyOverSampleRate)
-            planToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyOverSampleRateStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::FREQUENCY_OVER_SAMPLE_RATE));
+            connectionPlanToComplete.streamToWorkerPlugInstructions.emplace_back(getFrequencyOverSampleRateStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::FREQUENCY_OVER_SAMPLE_RATE));
         if (configuration.receiveVelocity)
-            planToComplete.streamToWorkerPlugInstructions.emplace_back(getVelocityStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::VELOCITY));
+            connectionPlanToComplete.streamToWorkerPlugInstructions.emplace_back(getVelocityStreamID(voiceNumber), instrument->id, instrument->getInputPortNumber(Instrument::ContextParameter::VELOCITY));
 
         /*
         * After handling the interaction between the instrument and the workflow's
@@ -198,43 +200,114 @@ namespace ANGLECORE
         * configured. We loop through each parameter to create its specific, short
         * rendering pipeline.
         */
+
+        /* We loop through each parameter */
         for (const Parameter& parameter : instrument->getParameters())
         {
             /*
-            * For each parameter, we create a ParameterGenerator, that we assign to
-            * the instrument's voice:
+            * We first test if the parameter generators already exist for that
+            * instrument, using the content of the current parameter registration
+            * plan:
             */
-            std::shared_ptr<ParameterGenerator> generator = std::make_shared<ParameterGenerator>(parameter);
-            addWorker(generator);
-            assignVoiceToWorker(voiceNumber, generator->id);
+            auto& parameterRegistrationPlanIterator = std::find_if(
+                parameterRegistrationPlan.addInstructions.cbegin(),
+                parameterRegistrationPlan.addInstructions.cend(),
+
+                /*
+                * We use a lambda function to detect if an entry instruction in the
+                * plan matches the current rack and parameter. We ensure we capture
+                * the proper external variables in the capture list [], while
+                * avoiding unecessary copies by passing them by reference. Note that
+                * the lambda function will search for the parameter's identifier
+                * first, as it is more likely that the rack number is already
+                * correct when inserting several instruments in a row at a given
+                * rack. Thanks to operator&& precedence, this should slightly help
+                * improve performance.
+                */
+                [&parameter, &rackNumber](ParameterRegistrationPlan::Instruction instruction) { return instruction.parameterIdentifier == parameter.identifier && instruction.rackNumber == rackNumber; }
+            );
 
             /*
-            * Then we create a stream that will contain the output of the generator,
-            * i.e. the parameter's values:
+            * If the parameter registration plan DOES contain an instruction for the
+            * current parameter, then we need to use it to connect the instrument to
+            * the existing generators. Note that it is not necessary to test if
+            * another instruction exists to rather remove the parameter from the
+            * register (in the "removeInstructions" vector), as removal instructions
+            * will be executed first, and additions second.
             */
-            std::shared_ptr<Stream> parameterStream = std::make_shared<Stream>();
-            addStream(parameterStream);
+            if (parameterRegistrationPlanIterator != parameterRegistrationPlan.addInstructions.cend())
+            {
+                /*
+                * We first retrieve the parameter stream from the parameter
+                * registration plan. We do not need to retrieve the generator, as we
+                * can directly use the stream and connect it to the instrument:
+                */
+                const std::shared_ptr<Stream>& stream = parameterRegistrationPlanIterator->parameterStream;
+
+                /*
+                * Afterwards, we connect the stream to the instrument to construct a
+                * short rendering pipeline, which feeds in the instrument. Note that
+                * here, the generator and the stream are already connected together,
+                * so we do not need to plug them into one another. We simply need to
+                * take care of the connection between the stream and the instrument.
+                */
+
+                /*
+                * We make this connection directly here rather than planning it, as
+                * we know the parameter generator involved will only be called when
+                * the instrument is properly connected to the real-time rendering
+                * pipeline. Therefore, the generator will not interfere with the
+                * current rendering pipeline.
+                */
+                plugStreamIntoWorker(stream->id, instrument->id, instrument->getInputPortNumber(parameter.identifier));
+            }
 
             /*
-            * And finally, we connect those elements together with the instrument to
-            * construct a short rendering pipeline, which feeds in the instrument.
-            * Note that we make these connections directly here rather than planning
-            * them, as we know the parameter generator involved will only be called
-            * when the instrument is properly connected to the real-time rendering
-            * pipeline. Therefore, although the generator can almost already receive
-            * parameter change requests, it will not interfere with the current
-            * rendering pipeline.
+            * Otherwise, if the parameter registration plan does NOT contain any
+            * instruction for the current parameter, we need to create our own.
             */
-            plugWorkerIntoStream(generator->id, 0, parameterStream->id);
-            plugStreamIntoWorker(parameterStream->id, instrument->id, instrument->getInputPortNumber(parameter.identifier));
+            else
+            {
+                /*
+                * For the current parameter, we create a ParameterGenerator that is
+                * not assigned to any voice:
+                */
+                std::shared_ptr<ParameterGenerator> generator = std::make_shared<ParameterGenerator>(parameter);
+                addWorker(generator);
+
+                /*
+                * Then we create a stream that will contain the output of the
+                * generator, i.e. the parameter's value:
+                */
+                std::shared_ptr<Stream> stream = std::make_shared<Stream>();
+                addStream(stream);
+
+                /*
+                * Afterwards, we connect those elements together with the instrument
+                * to construct a short rendering pipeline, which feeds in the
+                * instrument. Note that we make these connections directly here
+                * rather than planning them, as we know the parameter generator
+                * involved will only be called when the instrument is properly
+                * connected to the real-time rendering pipeline. Therefore, the
+                * generator will not interfere with the current rendering pipeline.
+                */
+                plugWorkerIntoStream(generator->id, 0, stream->id);
+                plugStreamIntoWorker(stream->id, instrument->id, instrument->getInputPortNumber(parameter.identifier));
+
+                /*
+                * And finally, we add a new instruction to the parameter
+                * registration plan.
+                */
+                parameterRegistrationPlan.addInstructions.emplace_back(rackNumber, parameter.identifier, generator, stream);
+            }
         }
 
         /*
-        * The plan is then completed for connecting the Instrument's output bus into
-        * the Mixer.
+        * The connection plan is then completed for connecting the Instrument's
+        * output bus into the Mixer.
         */
         for (unsigned short c = 0; c < ANGLECORE_NUM_CHANNELS; c++)
-            planToComplete.workerToStreamPlugInstructions.emplace_back(getMixerInputStreamID(voiceNumber, rackNumber, c), instrument->id, c);
+            connectionPlanToComplete.workerToStreamPlugInstructions.emplace_back(getMixerInputStreamID(voiceNumber, rackNumber, c), instrument->id, c);
     }
 
     unsigned short AudioWorkflow::findFreeVoice() const
@@ -425,6 +498,78 @@ namespace ANGLECORE
 
         /* Finally, we return the voice's tail duration we have just computed */
         return voiceStopDuration;
+    }
+
+    void AudioWorkflow::executeParameterRegistrationPlan(ParameterRegistrationPlan& plan)
+    {
+        /* We execute then given plan, starting from the remove instructions. */
+
+        for (auto& instruction : plan.removeInstructions)
+        {
+            /*
+            * We check if the instruction's rack number is valid (this is the
+            * equivalent of checking if workers and streams exist in the workflow
+            * for connection plans).
+            */
+            if (instruction.rackNumber < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+            {
+                /*
+                * If the rack number is valid, then we access the corresponding
+                * register and remove the parameter from it. Note that we first need
+                * to retrieve the corresponding workflow items, in order to send
+                * them to the Master for later deletion.
+                */
+
+                /*
+                * We look for the workflow items corresponding to the parameter in
+                * the register:
+                */
+                ParameterRegister::Entry entry = m_parameterRegisters[instruction.rackNumber].find(instruction.parameterIdentifier);
+
+                /*
+                * And if we found them, then we send them into the method's second
+                * argument for later deletion, and we finally remove them from the
+                * register.
+                */
+                if (entry.generator && entry.stream)
+                {
+                    // TO DO: send the generator and stream to a garbage collector
+
+                    m_parameterRegisters[instruction.rackNumber].remove(instruction.parameterIdentifier);
+                }
+            }
+        }
+
+        for (auto& instruction : plan.addInstructions)
+        {
+            /*
+            * We check if the instruction is valid regarding its rack number and
+            * workflow items (this is the equivalent of checking if workers and
+            * streams exist in the workflow for connection plans).
+            */
+            if (instruction.rackNumber < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE && instruction.parameterGenerator && instruction.parameterStream)
+            {
+                /*
+                * If the instruction is valid, then we add a new entry to the
+                * corresponding register:
+                */
+                ParameterRegister::Entry entry;
+                entry.generator = std::move(instruction.parameterGenerator);
+                entry.stream = std::move(instruction.parameterStream);
+                m_parameterRegisters[instruction.rackNumber].insert(instruction.parameterIdentifier, entry);
+            }
+        }
+    }
+
+    std::shared_ptr<ParameterGenerator> AudioWorkflow::findParameterGenerator(unsigned short rackNumber, StringView parameterIdentifier)
+    {
+        /* We retrieve the parameter register corresponding to the given rack */
+        const ParameterRegister& parameterRegister = m_parameterRegisters[rackNumber];
+
+        /* Then we look for the given parameter inside of this register */
+        ParameterRegister::Entry entry = parameterRegister.find(parameterIdentifier);
+
+        return entry.generator;
     }
 
     uint32_t AudioWorkflow::getMixerInputStreamID(unsigned short voiceNumber, unsigned short instrumentRackNumber, unsigned short channel) const

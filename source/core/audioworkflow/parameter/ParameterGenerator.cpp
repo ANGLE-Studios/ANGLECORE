@@ -71,8 +71,8 @@ namespace ANGLECORE
             * soon as possible. This pointer will hold a copy of any
             * ParameterChangeRequest that has been sent by the Master to the
             * ParameterGenerator. When it is deleted, its reference count will
-            * decrement, and hereby signal to the Master the ConnectionRequest has
-            * been processed.
+            * decrement, and hereby signal to the Master the ParameterChangeRequest
+            * has been processed.
             */
             std::shared_ptr<const ParameterChangeRequest> request;
 
