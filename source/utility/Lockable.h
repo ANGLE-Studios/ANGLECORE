@@ -38,7 +38,7 @@ namespace ANGLECORE
 
         /**
         * Returns the Lockable's internal mutex. Note that Lockable objects never
-        * lock their mutex themselves: it is the responsability of the caller to
+        * lock their mutex themselves: it is the responsibility of the caller to
         * lock a Lockable appropriately when consulting or modifying its content in
         * a multi-threaded environment.
         */

@@ -154,7 +154,7 @@ namespace ANGLECORE
     {
         /*
         * ===================================
-        * STEP 1/3: PROCESS REQUESTS
+        * STEP 1/2: PROCESS REQUESTS
         * ===================================
         */
 
@@ -162,7 +162,7 @@ namespace ANGLECORE
 
         /*
         * ===================================
-        * STEP 2/3: RENDERING
+        * STEP 2/2: RENDERING
         * ===================================
         */
 
@@ -224,7 +224,7 @@ namespace ANGLECORE
     void Master::splitAndRenderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample)
     {
         /*
-        * The purpose of this method is to fulfill the Master's responsability to
+        * The purpose of this method is to fulfill the Master's responsibility to
         * only request a valid number of samples to the renderer. Since a valid
         * number of samples is a number that is both greater than 0 and less than
         * ANGLECORE_FIXED_STREAM_SIZE, we need to cut the audio block to generate
