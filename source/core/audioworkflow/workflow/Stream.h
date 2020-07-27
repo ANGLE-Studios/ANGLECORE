@@ -24,6 +24,8 @@
 
 #include "WorkflowItem.h"
 
+#include "../../../config/RenderingConfig.h"
+
 namespace ANGLECORE
 {
     /**
@@ -52,14 +54,14 @@ namespace ANGLECORE
         ~Stream();
 
         /** Provides a read access to the internal buffer. */
-        const double* const getDataForReading() const;
+        const floating_type* getDataForReading() const;
 
         /** Provides a write access to the internal buffer. */
-        double* const getDataForWriting();
+        floating_type* getDataForWriting();
 
     private:
 
         /** Internal buffer */
-        double* data;
+        floating_type* data;
     };
 }

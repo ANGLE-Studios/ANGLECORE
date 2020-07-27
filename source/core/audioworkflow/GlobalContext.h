@@ -23,38 +23,36 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 
-#include "workflow/Stream.h"
 #include "workflow/Worker.h"
+#include "parameter/Parameter.h"
+#include "parameter/ParameterGenerator.h"
+#include "workflow/Stream.h"
 
 namespace ANGLECORE
 {
     /**
-    * \class Builder Builder.h
-    * Abstract class representing an object that is able to build worfklow items.
+    * \struct GlobalContext GlobalContext.h
+    * Set of streams which provide useful information, such as the sample rate the
+    * audio should be rendered into, in a centralized spot, shared by the rest of
+    * the AudioWorkflow.
     */
-    class Builder
+    struct GlobalContext
     {
-        /**
-        * \struct WorkflowIsland Builder.h
-        * Isolated subset of a workflow, which is not connected to the real-time
-        * rendering pipeline yet, but will be connected to the whole workflow by the
-        * real-time thread.
-        */
-        struct WorkflowIsland
-        {
-            std::vector<std::shared_ptr<Stream>> streams;
-            std::vector<std::shared_ptr<Worker>> workers;
-        };
+        std::shared_ptr<Stream> sampleRateStream;
+        std::shared_ptr<Stream> sampleRateReciprocalStream;
 
-        /* We rely on the default constructor */
-        
         /**
-        * Builds and returns a WorkflowIsland for a Workflow to integrate. This
-        * method should be overriden in each sub-class to construct the appropriate
-        * WorkflowIsland.
+        * Creates a GlobalContext, hereby initializing every pointer to a Stream or
+        * a Worker to a non null pointer. Note that this method does not do any
+        * connection between streams and workers, as this is the responsability of
+        * the AudioWorkflow to which the GlobalContext belong.
         */
-        virtual std::shared_ptr<WorkflowIsland> build() = 0;
+        GlobalContext();
+
+        void setSampleRate(floating_type sampleRate);
+
+    private:
+        floating_type m_currentSampleRate;
     };
 }

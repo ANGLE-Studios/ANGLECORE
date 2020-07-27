@@ -22,22 +22,32 @@
 
 #pragma once
 
-/**********************************************************************
-** GENERAL AUDIO SETTINGS
-**********************************************************************/
+#include <mutex>
 
-#define ANGLECORE_NUM_CHANNELS 2
-#define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
-#define ANGLECORE_MAX_SAMPLE_RATE 192000                /**< Maximum sample rate, in Hz */
+namespace ANGLECORE
+{
+    /**
+    * \class Lockable Lockable.h
+    * Utility object that can be locked for handling concurrency issues. The class
+    * simply contains a mutex and a public method to access it by reference in order
+    * to lock it.
+    */
+    class Lockable
+    {
+    public:
 
-/**********************************************************************
-** AUDIO WORKFLOW
-**********************************************************************/
+        /**
+        * Returns the Lockable's internal mutex. Note that Lockable objects never
+        * lock their mutex themselves: it is the responsibility of the caller to
+        * lock a Lockable appropriately when consulting or modifying its content in
+        * a multi-threaded environment.
+        */
+        std::mutex& getLock()
+        {
+            return m_lock;
+        }
 
-#define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
-
-/**********************************************************************
-** INSTRUMENT
-**********************************************************************/
-
-#define ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION 0.005   /**< Minimum duration to change the parameter of an instrument, in seconds */
+    private:
+        std::mutex m_lock;
+    };
+}

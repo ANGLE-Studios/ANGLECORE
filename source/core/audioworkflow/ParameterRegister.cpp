@@ -20,33 +20,39 @@
 **
 **********************************************************************/
 
-#pragma once
-
-#include "../config/RenderingConfig.h"
+#include "ParameterRegister.h"
 
 namespace ANGLECORE
 {
-    /**
-    * \class FastMath FastMath.h
-    * Provides various fast approximations of functions to accelerate computations.
-    */
-    class FastMath
-    {
-    public:
-        FastMath() = delete;
 
-        /**
-        * Returns exp(\p epsilon), using a second order approximation of the
-        * Taylor series for the exponential function. This method is faster than
-        * using the C exponential function itself, and has a good precision if
-        * epsilon is between -0.5 and 0.5.
-        * @param[in] epsilon    The argument to compute the exponential of. It
-        *   should be close to zero, or at least remain between -0.5 and 0.5.
+    void ParameterRegister::insert(StringView parameterIdentifier, const Entry& entryToInsert)
+    {
+        m_data[parameterIdentifier] = entryToInsert;
+    }
+
+    ParameterRegister::Entry ParameterRegister::find(StringView parameterIdentifier) const
+    {
+        /*
+        * We check whether or not the register's map contains an entry for the given
+        * parameter, and if so, we return the corresponding entry.
         */
-        /* TODO: in C++14 and later, this could be made a constexpr. */
-        inline static floating_type exp(floating_type epsilon)
-        {
-            return 1.0 + epsilon + epsilon * epsilon * 0.5;
-        }
-    };
+
+        const auto& registerIterator = m_data.find(parameterIdentifier);
+
+        /* If an entry is found, we return it */
+        if (registerIterator != m_data.end())
+            return registerIterator->second;
+
+        /* Otherwise, we return an empty entry */
+        Entry entry;
+        entry.generator = nullptr;
+        entry.stream = nullptr;
+        return entry;
+    }
+
+    void ParameterRegister::remove(StringView parameterIdentifier)
+    {
+        m_data.erase(parameterIdentifier);
+    }
+
 }

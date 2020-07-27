@@ -184,7 +184,7 @@ namespace ANGLECORE
         * plug() and unplug() methods instead of the executeConnectionInstruction()
         * methods to save up one callback layer.
         * @param[in] plan The ConnectionPlan to execute. It should refer to existing
-        *   elements in the Workflow, as the execution will partially fail
+        *   elements in the Workflow, as the execution will at least partially fail
         *   otherwise.
         */
         bool executeConnectionPlan(const ConnectionPlan& plan);

@@ -24,7 +24,7 @@
 
 #include "workflow/Worker.h"
 
-#include "../../config/AudioConfig.h"
+#include "../../config/RenderingConfig.h"
 
 namespace ANGLECORE
 {
@@ -33,7 +33,6 @@ namespace ANGLECORE
     * Worker that exports data from its input streams into an output buffer sent
     * to the host. An exporter applies a gain for calibrating its output level.
     */
-    template<typename OutputType>
     class Exporter :
         public Worker
     {
@@ -42,66 +41,45 @@ namespace ANGLECORE
         /**
         * Creates a Worker with zero output.
         */
-        Exporter() :
-            Worker(ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS, 0),
-            m_outputBuffer(nullptr),
-            m_numOutputChannels(0)
-        {}
+        Exporter();
 
         /**
         * Sets the new memory location to write into when exporting.
         * @param[in] buffer The new memory location.
         * @param[in] numChannels Number of output channels.
+        * @param[in] startSample Position to start from in the buffer.
         */
-        void setOutputBuffer(OutputType** buffer, unsigned short numChannels, uint32_t startSample)
-        {
-            m_outputBuffer = buffer;
-            m_numOutputChannels = numChannels;
-            m_startSample = startSample;
-        }
+        void setOutputBuffer(export_type** buffer, unsigned short numChannels, uint32_t startSample);
 
-        void work(unsigned int numSamplesToWorkOn)
-        {
-            /*
-            * It is assumed that both m_numOutputChannels and numSamplesToWorkOn
-            * are in-range, i.e. less than or equal to the output buffer's
-            * number of channels and the stream and buffer size respectively. It
-            * is also assumed the output buffer has been properly set to a valid
-            * memory location.
-            */
+        /**
+        * Exports its input streams into the memory location that was given by the
+        * setOutputBuffer() method. The Exporter will take care of any possible
+        * mismatch between the number of channels rendered by ANGLECORE and the
+        * number of channels requested by the host.
+        * @param[in] numSamplesToWorkOn Number of samples to export.
+        */
+        void work(unsigned int numSamplesToWorkOn);
 
-            /*
-            * If the host request less channels than rendered, we sum their
-            * content using a modulo approach.
-            */
-            if (m_numOutputChannels < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)
-            {
-                /* We first clear the output buffer */
-                for (unsigned short c = 0; c < m_numOutputChannels; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i] = 0.0;
+        /**
+        * Increments the voice count. The Exporter will only export data if its
+        * internal voice count is positive (> 0). Note that the voice count will
+        * be clipped before exceeding the maximum number of voices available if this
+        * method is called repeatedly.
+        */
+        void incrementVoiceCount();
 
-                /* And then we compute the sum into the output buffer */
-                for (unsigned short c = 0; c < ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c % m_numOutputChannels][i] += static_cast<OutputType>(getInputStream(c)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
-            }
-
-            /*
-            * Otherwise, if we have not rendered enough channels for the host,
-            * we simply duplicate data.
-            */
-            else
-            {
-                for (unsigned int c = 0; c < m_numOutputChannels; c++)
-                    for (uint32_t i = m_startSample; i < m_startSample + numSamplesToWorkOn; i++)
-                        m_outputBuffer[c][i] = static_cast<OutputType>(getInputStream(c % ANGLECORE_AUDIOWORKFLOW_NUM_CHANNELS)[i] * ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN);
-            }
-        }
+        /**
+        * Decrements the voice count. The Exporter will stop exporting data when its
+        * internal voice count reaches the value of 0. Note that the voice count
+        * will be clipped so it does not become negative if this method is called
+        * repeatedly.
+        */
+        void decrementVoiceCount();
 
     private:
-        OutputType** m_outputBuffer;
+        export_type** m_outputBuffer;
         unsigned short m_numOutputChannels;
         uint32_t m_startSample;
+        unsigned short m_numVoicesOn;
     };
 }

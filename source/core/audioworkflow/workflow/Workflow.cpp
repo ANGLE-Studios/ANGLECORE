@@ -328,6 +328,21 @@ namespace ANGLECORE
         if (!worker || m_workers.find(worker->id) == m_workers.end())
             return;
 
+        /*
+        * We create a lambda for comparing the worker' ID with another worker's ID.
+        * Note that the lambda function does not check for null pointers.
+        */
+        auto hasSameIDAsWorker = [&worker](std::shared_ptr<Worker> other) { return other->id == worker->id; };
+
+        /*
+        * If the worker is already part of the rendering sequence, then there is no
+        * need to explore it again, so we also return here. Note that only non-null
+        * pointers are inserted in the rendering sequence, so the lambda function
+        * used below should not fail.
+        */
+        auto& sequenceIterator = std::find_if(currentRenderingSequence.cbegin(), currentRenderingSequence.cend(), hasSameIDAsWorker);
+        if (sequenceIterator != currentRenderingSequence.cend())
+            return;
 
         for (unsigned short port = 0; port < worker->getNumInputs(); port++)
         {
@@ -443,20 +458,16 @@ namespace ANGLECORE
         }
 
         /*
-        * Finally, we add the worker to the rendering sequence if it was not already
-        * there, and if it is part of the workflow, which we already know.
+        * Finally, we add the worker to the rendering sequence if it is not already
+        * there, and if it is part of the workflow, which we already know. Just to
+        * be safe against feedbacks, we check again if the worker is already part of
+        * the current rendering sequence. Note that only non-null pointers are
+        * inserted in the rendering sequence, so the lambda function used below
+        * should not fail.
         */
-        bool alreadyInSequence = false;
-        for (auto it = currentRenderingSequence.cbegin(); it != currentRenderingSequence.cend() && !alreadyInSequence; it++)
-        {
-            /*
-            * We use the worker's ID to detect whether it is already in the sequence
-            */
-            if ((*it)->id == worker->id)
-                alreadyInSequence = true;
-        }
-        if (!alreadyInSequence)
-            currentRenderingSequence.emplace_back(worker);
+        auto& sequenceSecondCheckIterator = std::find_if(currentRenderingSequence.cbegin(), currentRenderingSequence.cend(), hasSameIDAsWorker);
+        if (sequenceSecondCheckIterator == currentRenderingSequence.cend())
+            currentRenderingSequence.push_back(worker);
     }
 
     void Workflow::completeRenderingSequenceForStream(const std::shared_ptr<const Stream>& stream, const ConnectionPlan& plan, std::vector<std::shared_ptr<Worker>>& currentRenderingSequence) const

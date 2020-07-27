@@ -42,7 +42,7 @@ namespace ANGLECORE
 
         /**
         * Resizes the internal vectors of streams, and initializes all the Stream
-        * pointers to nullptr. To be fully operational, the WorkflowManager needs to
+        * pointers to nullptr. To be fully operational, the Workflow needs to
         * connect the Worker's input and output to valid streams.
         * @param[in] numInputs Number of inputs.
         * @param[in] numOutputs Number of output.
@@ -95,16 +95,16 @@ namespace ANGLECORE
         void disconnectOutput(unsigned short outputPortNumber);
 
         /**
-        * Provides a read only access to the Stream at \p index in the input bus.
+        * Provides a read-only access to the Stream at \p index in the input bus.
         * @param[in] index Index of the stream within the input bus.
         */
-        const double* const getInputStream(unsigned short index) const;
+        const floating_type* getInputStream(unsigned short index) const;
 
         /**
         * Provides a write access to the Stream at \p index in the output bus.
         * @param[in] index Index of the stream within the output bus.
         */
-        double* getOutputStream(unsigned short index) const;
+        floating_type* getOutputStream(unsigned short index) const;
 
         /**
         * Returns a vector containing all the input streams the worker is connected

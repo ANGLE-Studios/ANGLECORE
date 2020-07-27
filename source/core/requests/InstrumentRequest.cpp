@@ -20,25 +20,12 @@
 **
 **********************************************************************/
 
-#pragma once
-
-#include <memory>
-
-#include "../audioworkflow/workflow/Worker.h"
+#include "InstrumentRequest.h"
 
 namespace ANGLECORE
 {
-    /**
-    * \struct RenderingItem RenderingItem.h
-    * Element of a rendering sequence. Contains the Worker to call, and the
-    * increment to use after calling the Worker.
-    */
-    struct RenderingItem
-    {
-        /** Worker to call to render this item */
-        std::shared_ptr<Worker> worker;
-
-        /** Increment to add after calling the Worker */
-        uint32_t increment;
-    };
+    InstrumentRequest::InstrumentRequest(Type type, unsigned short rackNumber) :
+        type(type),
+        rackNumber(rackNumber)
+    {}
 }

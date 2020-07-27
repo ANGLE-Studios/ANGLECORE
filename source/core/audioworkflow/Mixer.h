@@ -22,7 +22,11 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "workflow/Worker.h"
+#include "../../config/RenderingConfig.h"
+#include "../../config/AudioConfig.h"
 
 namespace ANGLECORE
 {
@@ -47,7 +51,82 @@ namespace ANGLECORE
         */
         void work(unsigned int numSamplesToWorkOn);
 
+        /**
+        * Instructs the Mixer to turn a Voice on, and to recompute its increments.
+        * This method is really fast, as it will only be called by the real-time
+        * thread.
+        * @param[in] voiceNumber Number identifying the Voice to turn on
+        */
+        void turnVoiceOn(unsigned short voiceNumber);
+
+        /**
+        * Instructs the Mixer to turn a Voice off, and to recompute its increments.
+        * This method is really fast, as it will only be called by the real-time
+        * thread.
+        * @param[in] voiceNumber Number identifying the Voice to turn on
+        */
+        void turnVoiceOff(unsigned short voiceNumber);
+
+        /**
+        * Turns the given Rack on and use it in the mix. This method must only be
+        * called by the real-time thread.
+        * @param[in] rackNumber Rack to turn on.
+        */
+        void turnRackOn(unsigned short rackNumber);
+
+        /**
+        * Turns the given Rack off and stop using it in the mix. This method must
+        * only be called by the real-time thread.
+        * @param[in] rackNumber Rack to turn off.
+        */
+        void turnRackOff(unsigned short rackNumber);
+
     private:
+
+        /**
+        * Recomputes the Mixer's voice increments after a Voice has been turned on
+        * or off. This method is really fast, as it will only be called by the
+        * real-time thread.
+        */
+        void updateVoiceIncrements();
+
+        /**
+        * Recomputes the Mixer's rack increments after a Voice has been turned on or
+        * off. This method is really fast, as it will only be called by the
+        * real-time thread.
+        */
+        void updateRackIncrements();
+
         const unsigned short m_totalNumInstruments;
+
+        /**
+        * Voice to start from when mixing voices. This may vary depending on which
+        * Voice is on and off.
+        */
+        unsigned short m_voiceStart;
+
+        /**
+        * Jumps to perform between voices when mixing the audio output in order to
+        * avoid those that are off.
+        */
+        uint32_t m_voiceIncrements[ANGLECORE_NUM_VOICES];
+        
+        /** Tracks the on/off status of every Voice */
+        bool m_voiceIsOn[ANGLECORE_NUM_VOICES];
+
+        /**
+        * Rack to start from when mixing audio. This may vary depending on which
+        * Rack is on and off.
+        */
+        unsigned short m_rackStart;
+
+        /**
+        * Jumps to perform between racks when mixing the audio output in order to
+        * avoid those corresponding to instruments that are off.
+        */
+        uint32_t m_rackIncrements[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
+
+        /** Tracks the on/off status of every Rack */
+        bool m_rackIsOn[ANGLECORE_NUM_VOICES];
     };
 }

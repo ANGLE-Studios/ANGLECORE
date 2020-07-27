@@ -22,22 +22,4 @@
 
 #pragma once
 
-/**********************************************************************
-** GENERAL AUDIO SETTINGS
-**********************************************************************/
-
-#define ANGLECORE_NUM_CHANNELS 2
-#define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
-#define ANGLECORE_MAX_SAMPLE_RATE 192000                /**< Maximum sample rate, in Hz */
-
-/**********************************************************************
-** AUDIO WORKFLOW
-**********************************************************************/
-
-#define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
-
-/**********************************************************************
-** INSTRUMENT
-**********************************************************************/
-
-#define ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION 0.005   /**< Minimum duration to change the parameter of an instrument, in seconds */
+#define ANGLECORE_EPSILON 1e-5      /**<Represents a non-null value very close to zero, that can be used in several ways when working with small numbers. Must be positive (> 0). */

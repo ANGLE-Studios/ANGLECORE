@@ -29,9 +29,9 @@
 * In order to avoid unnecessary copies and memory allocations when manipulating an
 * STL key-value containers (map, unordered_map, etc.), it is definitely tempting to
 * use const char* instead of std::string as a key type. This especially makes sense
-* in the context of the Instrument class, where Parameters are stored in an
-* unordered_map that is likely to be heavily solicited when rendering an audio
-* block.
+* in the context of the Instrument class, where some parameters' information is
+* stored in unordered maps that are likely to be heavily solicited when rendering an
+* audio block.
 * However, in order to use C string keys (const char*) in those containers, one
 * needs to define a structure for automatically hashing and comparing C strings.
 * In C++17, the std::string_view type seems perfectly suited for the job, but in

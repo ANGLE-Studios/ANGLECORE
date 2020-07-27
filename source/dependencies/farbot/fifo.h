@@ -3,54 +3,55 @@
 #include <atomic>
 #include <cassert>
 #include <thread>
+#include <array>
 
 namespace farbot
 {
-namespace detail { template <typename, bool, bool, bool, bool, std::size_t> class fifo_impl; }
+    namespace detail { template <typename, bool, bool, bool, bool, std::size_t> class fifo_impl; }
 
-namespace fifo_options
-{
-enum class concurrency
-{
-    single,                  // single consumer/single producer
-    multiple
-};
+    namespace fifo_options
+    {
+    enum class concurrency
+    {
+        single,                  // single consumer/single producer
+        multiple
+    };
 
-enum class full_empty_failure_mode
-{
-    // Setting this as producer option causes the fifo to overwrite on a push when the fifo is full
-    // Setting this a s consumer option causes the fifo to return a default constructed value on pop when the fifo is empty
-    overwrite_or_return_default,
+    enum class full_empty_failure_mode
+    {
+        // Setting this as producer option causes the fifo to overwrite on a push when the fifo is full
+        // Setting this as consumer option causes the fifo to return a default constructed value on pop when the fifo is empty
+        overwrite_or_return_default,
 
-    // Return false on push/pop if the fifo is full/empty respectively
-    return_false_on_full_or_empty
-};
-}
+        // Return false on push/pop if the fifo is full/empty respectively
+        return_false_on_full_or_empty
+    };
+    }
 
-// single consumer, single producer
-template <typename T,
-          fifo_options::concurrency consumer_concurrency = fifo_options::concurrency::multiple,
-          fifo_options::concurrency producer_concurrency = fifo_options::concurrency::multiple,
-          fifo_options::full_empty_failure_mode consumer_failure_mode = fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-          fifo_options::full_empty_failure_mode producer_failure_mode = fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-          std::size_t MAX_THREADS = 64>
-class fifo
-{
-public:
-    fifo (int capacity);
+    // single consumer, single producer
+    template <typename T,
+              fifo_options::concurrency consumer_concurrency = fifo_options::concurrency::multiple,
+              fifo_options::concurrency producer_concurrency = fifo_options::concurrency::multiple,
+              fifo_options::full_empty_failure_mode consumer_failure_mode = fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
+              fifo_options::full_empty_failure_mode producer_failure_mode = fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
+              std::size_t MAX_THREADS = 64>
+    class fifo
+    {
+    public:
+        fifo (int capacity);
 
-    bool push(T&& result);
+        bool push(T&& result);
 
-    bool pop(T& result);
+        bool pop(T& result);
 
-private:
-    detail::fifo_impl<T,
-                      consumer_concurrency == fifo_options::concurrency::single,
-                      producer_concurrency == fifo_options::concurrency::single,
-                      consumer_failure_mode == fifo_options::full_empty_failure_mode::overwrite_or_return_default,
-                      producer_failure_mode == fifo_options::full_empty_failure_mode::overwrite_or_return_default,
-                      MAX_THREADS> impl;
-};
+    private:
+        detail::fifo_impl<T,
+                          consumer_concurrency == fifo_options::concurrency::single,
+                          producer_concurrency == fifo_options::concurrency::single,
+                          consumer_failure_mode == fifo_options::full_empty_failure_mode::overwrite_or_return_default,
+                          producer_failure_mode == fifo_options::full_empty_failure_mode::overwrite_or_return_default,
+                          MAX_THREADS> impl;
+    };
 }
 
 //==============================================================================
@@ -67,6 +68,12 @@ namespace farbot
         {
             std::atomic<std::thread::id> tid = {};
             std::atomic<uint32_t> pos = { std::numeric_limits<uint32_t>::max() };
+
+            thread_info()
+            {
+                // We moved the initial lock-free assertion on thread::id here
+                assert(tid.is_lock_free());
+            }
         };
 
         template <std::size_t MAX_THREADS>
@@ -75,7 +82,7 @@ namespace farbot
             std::atomic<uint32_t> num_threads = { 0 };
             std::array<thread_info, MAX_THREADS> tinfos = { {} };
 
-            std::atomic<uint32_t>& get_tpos() noexcept
+            std::atomic<uint32_t>& get_tpos()
             {
                 auto my_tid = std::this_thread::get_id();
                 auto num = num_threads.load(std::memory_order_relaxed);
@@ -99,7 +106,7 @@ namespace farbot
                 return result.pos;
             }
 
-            uint32_t getpos(uint32_t min) const noexcept
+            uint32_t getpos(uint32_t min) const
             {
                 auto num = num_threads.load(std::memory_order_relaxed);
 
@@ -116,12 +123,12 @@ namespace farbot
             std::size_t MAX_THREADS>
         struct read_or_writer
         {
-            uint32_t getpos() const noexcept
+            uint32_t getpos() const
             {
                 return posinfo.getpos(reserve.load(std::memory_order_relaxed));
             }
 
-            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t max) noexcept
+            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t max)
             {
                 auto& tpos = posinfo.get_tpos();
                 auto pos = reserve.load(std::memory_order_relaxed);
@@ -157,12 +164,12 @@ namespace farbot
         template <typename T, bool is_writer, std::size_t MAX_THREADS>
         struct read_or_writer<T, is_writer, true, false, MAX_THREADS>
         {
-            uint32_t getpos() const noexcept
+            uint32_t getpos() const
             {
                 return reserve.load(std::memory_order_acquire);
             }
 
-            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t max) noexcept
+            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t max)
             {
                 auto pos = reserve.load(std::memory_order_relaxed);
 
@@ -181,12 +188,12 @@ namespace farbot
         template <typename T, bool is_writer, std::size_t MAX_THREADS>
         struct read_or_writer<T, is_writer, true, true, MAX_THREADS>
         {
-            uint32_t getpos() const noexcept
+            uint32_t getpos() const
             {
                 return reserve.load(std::memory_order_acquire);
             }
 
-            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t) noexcept
+            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t)
             {
                 auto pos = reserve.load(std::memory_order_relaxed);
 
@@ -202,12 +209,12 @@ namespace farbot
         template <typename T, bool is_writer, std::size_t MAX_THREADS>
         struct read_or_writer<T, is_writer, false, true, MAX_THREADS>
         {
-            uint32_t getpos() const noexcept
+            uint32_t getpos() const
             {
                 return posinfo.getpos(reserve.load(std::memory_order_relaxed));
             }
 
-            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t) noexcept
+            bool push_or_pop(std::vector<T>& s, T && arg, uint32_t)
             {
                 auto& tpos = posinfo.get_tpos();
                 auto pos = reserve.fetch_add(1, std::memory_order_relaxed);
@@ -231,9 +238,6 @@ namespace farbot
             fifo_impl(int capacity) : slots(capacity)
             {
                 assert((capacity & (capacity - 1)) == 0);
-
-                // We moved the initial lock-free assertion on thread::id here
-                static_assert(std::atomic<std::thread::id>::is_lock_free());
             }
 
             bool push(T&& result)

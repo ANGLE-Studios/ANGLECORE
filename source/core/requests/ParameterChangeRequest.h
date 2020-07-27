@@ -22,22 +22,22 @@
 
 #pragma once
 
-/**********************************************************************
-** GENERAL AUDIO SETTINGS
-**********************************************************************/
+#include <stdint.h>
 
-#define ANGLECORE_NUM_CHANNELS 2
-#define ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE 10
-#define ANGLECORE_MAX_SAMPLE_RATE 192000                /**< Maximum sample rate, in Hz */
+#include "../../config/RenderingConfig.h"
 
-/**********************************************************************
-** AUDIO WORKFLOW
-**********************************************************************/
-
-#define ANGLECORE_AUDIOWORKFLOW_EXPORTER_GAIN 0.5
-
-/**********************************************************************
-** INSTRUMENT
-**********************************************************************/
-
-#define ANGLECORE_INSTRUMENT_MINIMUM_SMOOTHING_DURATION 0.005   /**< Minimum duration to change the parameter of an instrument, in seconds */
+namespace ANGLECORE
+{
+    /**
+    * \struct ParameterChangeRequest ParameterChangeRequest.h
+    * When the end-user asks to change the value of a Parameter within an Instrument
+    * (volume, etc.) or the entire AudioWorkflow (sample rate, etc.), an instance of
+    * this structure is created to store all necessary information about that
+    * request.
+    */
+    struct ParameterChangeRequest
+    {
+        floating_type newValue;
+        uint32_t durationInSamples;
+    };
+}

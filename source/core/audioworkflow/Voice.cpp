@@ -20,19 +20,23 @@
 **
 **********************************************************************/
 
-#pragma once
-
-#include <memory>
-#include <vector>
-
-#include "../workflow/ConnectionPlan.h"
-#include "../workflow/Worker.h"
+#include "Voice.h"
 
 namespace ANGLECORE
 {
-    struct ConnectionRequest
+    Voice::Voice() :
+        isFree(true),
+        isOn(false),
+        currentNoteNumber(0)
     {
-        ConnectionPlan plan;
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence;
-    };
+        /*
+        * The racks are all empty by default, so they should not contain any
+        * instrument.
+        */
+        for (unsigned short r = 0; r < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; r++)
+        {
+            racks[r].isEmpty = true;
+            racks[r].instrument = nullptr;
+        }
+    }
 }
