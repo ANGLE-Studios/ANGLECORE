@@ -57,7 +57,7 @@ namespace ANGLECORE
         * stream, it automatically implies its corresponding pointer is not null, as
         * we only insert non-null shared pointers into the maps.
         */
-        auto& streamIterator = m_streams.find(streamID);
+        auto streamIterator = m_streams.find(streamID);
         if (streamIterator != m_streams.end())
         {
             /* We found the stream, so we retrieve it */
@@ -68,7 +68,7 @@ namespace ANGLECORE
             * If we find the worker, it also implies its corresponding pointer is
             * not null, as we only insert non-null shared pointers into the maps.
             */
-            auto& workerIterator = m_workers.find(workerID);
+            auto workerIterator = m_workers.find(workerID);
             if (workerIterator != m_workers.end())
             {
                 /* We found the worker, so we retrieve it */
@@ -108,7 +108,7 @@ namespace ANGLECORE
         * worker, it automatically implies its corresponding pointer is not null, as
         * we only insert non-null shared pointers into the maps.
         */
-        auto& workerIterator = m_workers.find(workerID);
+        auto workerIterator = m_workers.find(workerID);
         if (workerIterator != m_workers.end())
         {
             /* We found the worker, so we retrieve it */
@@ -119,7 +119,7 @@ namespace ANGLECORE
             * If we find the stream, it also implies its corresponding pointer is
             * not null, as we only insert non-null shared pointers into the maps.
             */
-            auto& streamIterator = m_streams.find(streamID);
+            auto streamIterator = m_streams.find(streamID);
             if (streamIterator != m_streams.end())
             {
                 /* We found the stream, so we retrieve it */
@@ -176,7 +176,7 @@ namespace ANGLECORE
         * stream, it automatically implies its corresponding pointer is not null, as
         * we only insert non-null shared pointers into the maps.
         */
-        auto& streamIterator = m_streams.find(streamID);
+        auto streamIterator = m_streams.find(streamID);
         if (streamIterator != m_streams.end())
         {
             /*
@@ -184,7 +184,7 @@ namespace ANGLECORE
             * If we find the worker, it also implies its corresponding pointer is
             * not null, as we only insert non-null shared pointers into the maps.
             */
-            auto& workerIterator = m_workers.find(workerID);
+            auto workerIterator = m_workers.find(workerID);
             if (workerIterator != m_workers.end())
             {
                 /* We found the worker, so we retrieve it */
@@ -229,7 +229,7 @@ namespace ANGLECORE
         * worker, it automatically implies its corresponding pointer is not null, as
         * we only insert non-null shared pointers into the maps.
         */
-        auto& workerIterator = m_workers.find(workerID);
+        auto workerIterator = m_workers.find(workerID);
         if (workerIterator != m_workers.end())
         {
             /* We found the worker, so we retrieve it */
@@ -242,7 +242,7 @@ namespace ANGLECORE
             * If we find the stream, it also implies its corresponding pointer is
             * not null, as we only insert non-null shared pointers into the maps.
             */
-            auto& streamIterator = m_streams.find(streamID);
+            auto streamIterator = m_streams.find(streamID);
             if (streamIterator != m_streams.end())
             {
                 /*
@@ -340,7 +340,7 @@ namespace ANGLECORE
         * pointers are inserted in the rendering sequence, so the lambda function
         * used below should not fail.
         */
-        auto& sequenceIterator = std::find_if(currentRenderingSequence.cbegin(), currentRenderingSequence.cend(), hasSameIDAsWorker);
+        auto sequenceIterator = std::find_if(currentRenderingSequence.cbegin(), currentRenderingSequence.cend(), hasSameIDAsWorker);
         if (sequenceIterator != currentRenderingSequence.cend())
             return;
 
@@ -355,7 +355,7 @@ namespace ANGLECORE
             * into account the last valid plug instruction.
             */
 
-            auto& streamToWorkerPlugIterator = std::find_if(
+            auto streamToWorkerPlugIterator = std::find_if(
                 plan.streamToWorkerPlugInstructions.crbegin(),
                 plan.streamToWorkerPlugInstructions.crend(),
 
@@ -382,7 +382,7 @@ namespace ANGLECORE
                 * connection plan is executed. Therefore, we need to use that new
                 * stream to compute the next part of the renderingSequence.
                 */
-                auto& streamIterator = m_streams.find(streamToWorkerPlugIterator->uphillID);
+                auto streamIterator = m_streams.find(streamToWorkerPlugIterator->uphillID);
 
                 /*
                 * Note that once here, since the plug instruction is considered
@@ -418,7 +418,7 @@ namespace ANGLECORE
                     * will be unplugged.
                     */
 
-                    auto& streamToWorkerUnplugIterator = std::find_if(
+                    auto streamToWorkerUnplugIterator = std::find_if(
                         plan.streamToWorkerUnplugInstructions.cbegin(),
                         plan.streamToWorkerUnplugInstructions.cend(),
 
@@ -465,7 +465,7 @@ namespace ANGLECORE
         * inserted in the rendering sequence, so the lambda function used below
         * should not fail.
         */
-        auto& sequenceSecondCheckIterator = std::find_if(currentRenderingSequence.cbegin(), currentRenderingSequence.cend(), hasSameIDAsWorker);
+        auto sequenceSecondCheckIterator = std::find_if(currentRenderingSequence.cbegin(), currentRenderingSequence.cend(), hasSameIDAsWorker);
         if (sequenceSecondCheckIterator == currentRenderingSequence.cend())
             currentRenderingSequence.push_back(worker);
     }
@@ -488,7 +488,7 @@ namespace ANGLECORE
         * account the last valid plug instruction.
         */
 
-        auto& workerToStreamPlugIterator = std::find_if(
+        auto workerToStreamPlugIterator = std::find_if(
             plan.workerToStreamPlugInstructions.crbegin(),
             plan.workerToStreamPlugInstructions.crend(),
 
@@ -514,7 +514,7 @@ namespace ANGLECORE
             * connection plan is executed. Therefore, we need to use that new worker
             * to compute the next part of the renderingSequence.
             */
-            auto& workerIterator = m_workers.find(workerToStreamPlugIterator->uphillID);
+            auto workerIterator = m_workers.find(workerToStreamPlugIterator->uphillID);
 
             /*
             * Note that once here, since the plug instruction is considered valid
@@ -543,7 +543,7 @@ namespace ANGLECORE
             * We retrieve the current stream's input worker using the m_inputWorkers
             * attribute, which stores that information.
             */
-            auto& inputWorkerIterator = m_inputWorkers.find(stream->id);
+            auto inputWorkerIterator = m_inputWorkers.find(stream->id);
             if (inputWorkerIterator != m_inputWorkers.end())
             {
                 const std::shared_ptr<Worker>& inputWorker = inputWorkerIterator->second;
@@ -558,7 +558,7 @@ namespace ANGLECORE
                 * be disconnected from the stream.
                 */
 
-                auto& workerToStreamUnplugIterator = std::find_if(
+                auto workerToStreamUnplugIterator = std::find_if(
                     plan.workerToStreamUnplugInstructions.cbegin(),
                     plan.workerToStreamUnplugInstructions.cend(),
 

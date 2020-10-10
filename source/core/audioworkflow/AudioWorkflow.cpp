@@ -209,7 +209,7 @@ namespace ANGLECORE
             * instrument, using the content of the current parameter registration
             * plan:
             */
-            auto& parameterRegistrationPlanIterator = std::find_if(
+            auto parameterRegistrationPlanIterator = std::find_if(
                 parameterRegistrationPlan.addInstructions.cbegin(),
                 parameterRegistrationPlan.addInstructions.cend(),
 
