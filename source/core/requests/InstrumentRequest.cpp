@@ -21,9 +21,19 @@
 **********************************************************************/
 
 #include "InstrumentRequest.h"
+#include "../../config/AudioConfig.h"
 
 namespace ANGLECORE
 {
+    InstrumentRequest::Result::Result() :
+        Result(false, ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+    {}
+
+    InstrumentRequest::Result::Result(bool success, unsigned short rackNumber) :
+        success(success),
+        rackNumber(rackNumber)
+    {}
+
     InstrumentRequest::InstrumentRequest(Type type, unsigned short rackNumber) :
         type(type),
         rackNumber(rackNumber)

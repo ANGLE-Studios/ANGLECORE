@@ -24,7 +24,6 @@
 
 namespace ANGLECORE
 {
-
     void ParameterRegister::insert(StringView parameterIdentifier, const Entry& entryToInsert)
     {
         m_data[parameterIdentifier] = entryToInsert;
@@ -54,5 +53,4 @@ namespace ANGLECORE
     {
         m_data.erase(parameterIdentifier);
     }
-
 }

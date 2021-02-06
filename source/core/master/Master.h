@@ -103,7 +103,7 @@ namespace ANGLECORE
         void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
         template<class InstrumentType>
-        bool addInstrument();
+        InstrumentRequest::Result addInstrument();
 
     protected:
 
@@ -173,7 +173,7 @@ namespace ANGLECORE
     };
 
     template<class InstrumentType>
-    bool Master::addInstrument()
+    InstrumentRequest::Result Master::addInstrument()
     {
         std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
 
@@ -182,10 +182,10 @@ namespace ANGLECORE
         if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
 
             /*
-            * There is no empty spot, so we stop here and return false. We cannot
-            * insert a new instrument to the workflow.
+            * There is no empty spot, so we stop here and return an unsuccessful
+            * result. We cannot insert a new instrument to the workflow.
             */
-            return false;
+            return InstrumentRequest::Result(false, ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE);
 
         /*
         * Otherwise, if we can insert a new instrument, then we need to prepare the
@@ -294,6 +294,12 @@ namespace ANGLECORE
         * edited by the real-time thread, in order to determine whether or not the
         * request was been successfully processed.
         */
-        return request->connectionRequest.hasBeenSuccessfullyProcessed.load();
+        bool success = request->connectionRequest.hasBeenSuccessfullyProcessed.load();
+
+        /*
+        * Finally, we return all information we have into an
+        * InstrumentRequest::Result object:
+        */
+        return InstrumentRequest::Result(success, emptyRackNumber);
     }
 }
