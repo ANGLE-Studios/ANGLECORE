@@ -1232,7 +1232,7 @@ namespace ANGLECORE
         * Instructs the generator to change the parameter's value instantaneously,
         * without any transient phase. This method must never be called by the non
         * real-time thread, and should only be called by the real-time thread.
-        * Requests emitted by the non-real thread should use the
+        * Requests emitted by the non real-time thread should use the
         * postParameterChangeRequest() method instead.
         * @param[in] newValue The new value of the Parameter.
         */
