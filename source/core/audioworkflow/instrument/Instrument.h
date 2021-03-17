@@ -70,14 +70,6 @@ namespace ANGLECORE
             ContextConfiguration(bool receiveSampleRate, bool receiveSampleRateReciprocal, bool receiveFrequency, bool receiveFrequencyOverSampleRate, bool receiveVelocity);
         };
 
-        enum State
-        {
-            ON = 0,
-            ON_ASKED_TO_STOP,
-            ON_TO_OFF,
-            OFF
-        };
-
         /**
         * Creates an Instrument from a list of parameters, split between the context
         * parameters, which are common to other instruments (such as the sample rate
@@ -218,6 +210,15 @@ namespace ANGLECORE
         };
 
     private:
+
+        enum State
+        {
+            ON = 0,
+            ON_ASKED_TO_STOP,
+            ON_TO_OFF,
+            OFF
+        };
+
         const std::vector<ContextParameter> m_contextParameters;
         const std::vector<Parameter> m_parameters;
         const ContextConfiguration m_configuration;
