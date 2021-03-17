@@ -303,17 +303,6 @@ namespace ANGLECORE
                 * pointers are ignored.
                 */
 
-                switch (request->type)
-                {
-                case InstrumentRequest::Type::ADD:
-                    m_audioWorkflow.turnRackOn(request->rackNumber);
-                    break;
-
-                case InstrumentRequest::Type::REMOVE:
-                    m_audioWorkflow.turnRackOff(request->rackNumber);
-                    break;
-                }
-
                 ConnectionRequest& connectionRequest = request->connectionRequest;
 
                 /* We first test if the connection request is valid... */
@@ -351,6 +340,21 @@ namespace ANGLECORE
                 * entirely.
                 */
                 m_audioWorkflow.executeParameterRegistrationPlan(request->parameterRegistrationPlan);
+
+                /*
+                * Once all connections are made, we finish with the update of the
+                * racks in the workflow.
+                */
+                switch (request->type)
+                {
+                case InstrumentRequest::Type::ADD:
+                    m_audioWorkflow.turnRackOn(request->rackNumber);
+                    break;
+
+                case InstrumentRequest::Type::REMOVE:
+                    m_audioWorkflow.turnRackOff(request->rackNumber);
+                    break;
+                }
             }
         }
     }
