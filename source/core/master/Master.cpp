@@ -27,13 +27,7 @@
 
 namespace ANGLECORE
 {
-    Master::Master() :
-
-        /*
-        * The instrument request queue should only handle one request at a time, so
-        * there is no need to reserve more space than one slot.
-        */
-        m_instrumentRequests(1)
+    Master::Master()
     {
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
@@ -296,7 +290,7 @@ namespace ANGLECORE
             std::shared_ptr<InstrumentRequest> request;
 
             /* Has an InstrumentRequest been received? ... */
-            if (m_instrumentRequests.pop(request) && request)
+            if (m_requestManager.popInstrumentRequest(request) && request)
             {
                 /*
                 * ... YES! So we need to process the request. Note that null
@@ -355,6 +349,9 @@ namespace ANGLECORE
                     m_audioWorkflow.turnRackOff(request->rackNumber);
                     break;
                 }
+
+                request->success.store(true);
+                request->hasBeenProcessed.store(true);
             }
         }
     }

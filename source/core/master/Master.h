@@ -36,6 +36,7 @@
 #include "../../config/AudioConfig.h"
 #include "../requests/InstrumentRequest.h"
 #include "../../utility/StringView.h"
+#include "../requests/RequestManager.h"
 
 namespace ANGLECORE
 {
@@ -158,16 +159,7 @@ namespace ANGLECORE
         AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
-
-        /** Queue for pushing and receiving instrument requests. */
-        farbot::fifo<
-            std::shared_ptr<InstrumentRequest>,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
-        > m_instrumentRequests;
-
+        RequestManager m_requestManager;
         bool m_voiceIsStopping[ANGLECORE_NUM_VOICES];
         StopTracker m_stopTrackers[ANGLECORE_NUM_VOICES];
     };
@@ -235,71 +227,11 @@ namespace ANGLECORE
         connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
 
         /*
-        * Finally, we need to send the InstrumentRequest to the Renderer. To avoid
-        * any memory deallocation by the real-time thread after it is done with the
-        * request, we do not pass the request straight to the Renderer. Instead, we
-        * create a copy and send that copy to the latter. Therefore, when the
-        * Renderer is done with the request, it will only delete a copy of a shared
-        * pointer and decrement its reference count by one, signaling to the Master
-        * the request has been processed (and either succeeded or failed), and that
-        * it can be safely destroyed by the non real-time thread that created it.
+        * Finally, we post the InstrumentRequest asynchronously to the
+        * RequestManager:
         */
+        m_requestManager.postRequestAsynchronously(std::move(request));
 
-        /* We copy the InstrumentRequest... */
-        std::shared_ptr<InstrumentRequest> requestCopy = request;
-
-        /* ... And post the copy:*/
-        m_instrumentRequests.push(std::move(requestCopy));
-
-        /*
-        * From now on, the InstrumentRequest is in the hands of the real-time
-        * thread. We cannot access any member of 'request'. We will still use the
-        * reference count of the shared pointer as an indicator of when the
-        * real-time thread is done with the request (although it is not guaranteed
-        * to be safe by the standard). As long as that number is greater than 1
-        * (and, normally, equal to 2), the real-time thread is still in possession
-        * of the copy, and possibly processing it. So the non real-time thread
-        * should wait. When this number reaches 1, it means the real-time thread is
-        * done with the request and the non real-time thread can safely delete it.
-        */
-
-        /*
-        * To avoid infinite loops and therefore deadlocks while waiting for the
-        * real-time thread, we introduce a timeout, using a number of attempts.
-        */
-        const unsigned short timeoutAttempts = 4;
-        unsigned short attempt = 0;
-
-        /*
-        * We then wait for the real-time thread to finish, or for when we reach the
-        * timeout.
-        */
-        while (request.use_count() > 1 && attempt++ < timeoutAttempts)
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-        /*
-        * Once here, we either reached the timeout, or the copy of the
-        * InstrumentRequest has been destroyed, and only the original remains, and
-        * can be safely deleted. In any case, the original request will be deleted,
-        * so if the timeout is the reason for leaving the loop, then the copy will
-        * outlive the original request in the real-time thread, which will trigger
-        * memory deallocation upon destruction, and possibly provoke an audio glitch
-        * (this should actually be very rare). If we left the loop because the copy
-        * was destroyed (which is the common case), then the original will be safely
-        * deleted here by the non real-time thread.
-        */
-
-        /*
-        * We access the 'hasBeenSuccessfullyProcessed' variable that may have been
-        * edited by the real-time thread, in order to determine whether or not the
-        * request was been successfully processed.
-        */
-        bool success = request->connectionRequest.hasBeenSuccessfullyProcessed.load();
-
-        /*
-        * Finally, we return all information we have into an
-        * InstrumentRequest::Result object:
-        */
-        return InstrumentRequest::Result(success, emptyRackNumber);
+        return InstrumentRequest::Result(true, emptyRackNumber);
     }
 }

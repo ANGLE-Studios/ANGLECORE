@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <atomic>
 
+#include "Request.h"
 #include "../audioworkflow/workflow/ConnectionPlan.h"
 #include "../audioworkflow/workflow/Worker.h"
 #include "../audioworkflow/voiceassigner/VoiceAssigner.h"
@@ -47,7 +48,8 @@ namespace ANGLECORE
     * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
     * should be computed from the same ConnectionPlan and by the same AudioWorkflow.
     */
-    struct ConnectionRequest
+    struct ConnectionRequest :
+        public Request
     {
         ConnectionPlan plan;
         std::vector<std::shared_ptr<Worker>> newRenderingSequence;

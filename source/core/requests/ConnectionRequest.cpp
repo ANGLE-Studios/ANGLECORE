@@ -24,7 +24,8 @@
 
 namespace ANGLECORE
 {
-    ConnectionRequest::ConnectionRequest()
+    ConnectionRequest::ConnectionRequest() :
+        Request()
     {
         /*
         * By default, since the request has not been processed yet, its success flag

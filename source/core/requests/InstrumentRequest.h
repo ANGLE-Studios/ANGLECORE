@@ -24,6 +24,7 @@
 
 #include <memory>
 
+#include "Request.h"
 #include "ConnectionRequest.h"
 #include "../audioworkflow/ParameterRegistrationPlan.h"
 
@@ -38,7 +39,8 @@ namespace ANGLECORE
     * AudioWorkflow, and to add or remove entries from the corresponding
     * ParameterRegister.
     */
-    struct InstrumentRequest
+    struct InstrumentRequest :
+        public Request
     {
         /**
         * \struct Result InstrumentRequest.h

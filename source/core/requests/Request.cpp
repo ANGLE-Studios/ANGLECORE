@@ -20,23 +20,16 @@
 **
 **********************************************************************/
 
-#include "InstrumentRequest.h"
-#include "../../config/AudioConfig.h"
+#include "Request.h"
 
 namespace ANGLECORE
 {
-    InstrumentRequest::Result::Result() :
-        Result(false, ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
-    {}
+    Request::Request()
+    {
+        hasBeenProcessed.store(false);
+        success.store(false);
+    }
 
-    InstrumentRequest::Result::Result(bool success, unsigned short rackNumber) :
-        success(success),
-        rackNumber(rackNumber)
-    {}
-
-    InstrumentRequest::InstrumentRequest(Type type, unsigned short rackNumber) :
-        Request(),
-        type(type),
-        rackNumber(rackNumber)
+    Request::~Request()
     {}
 }

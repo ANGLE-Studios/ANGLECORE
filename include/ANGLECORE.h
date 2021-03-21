@@ -1918,9 +1918,42 @@ namespace ANGLECORE
 
     /*
     =================================================
-    Renderer
+    RequestManager
     =================================================
     */
+
+    /**
+    * \struct Request Request.h
+    * When the end-user instructs to change something in the AudioWorkflow, an
+    * instance of this structure is created to store all necessary information
+    * about that request.
+    */
+    struct Request
+    {
+        /**
+        * Indicates whether or not the request was processed, regardless of the
+        * success of its processing. This atomic boolean must always be set to true
+        * once a Request is processed; otherwise, if the Request has been posted
+        * asynchronously to the RequestManager, then the latter may not detect the
+        * end of the Request's execution and indefinitely wait for it.
+        */
+        std::atomic<bool> hasBeenProcessed;
+
+        /**
+        * Indicates whether the request was successfully processed. Must be read
+        * after hasBeenProcessed and wrote to before hasBeenProcessed when the
+        * request comes near its final processing step.
+        */
+        std::atomic<bool> success;
+
+        Request();
+
+        /**
+        * Virtual destructor to properly handle polymorphism and provide access to
+        * dynamic casting.
+        */
+        virtual ~Request();
+    };
 
     /**
     * \struct ConnectionRequest ConnectionRequest.h
@@ -1936,7 +1969,8 @@ namespace ANGLECORE
     * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
     * should be computed from the same ConnectionPlan and by the same AudioWorkflow.
     */
-    struct ConnectionRequest
+    struct ConnectionRequest :
+        public Request
     {
         ConnectionPlan plan;
         std::vector<std::shared_ptr<Worker>> newRenderingSequence;
@@ -1961,6 +1995,293 @@ namespace ANGLECORE
 
         ConnectionRequest();
     };
+
+    /**
+    * \struct InstrumentRequest InstrumentRequest.h
+    * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
+    * an instance of this structure is created to request the Mixer of the
+    * AudioWorkflow to either activate or deactivate the corresponding rack for its
+    * mixing process, to create or remove the necessary connections within the
+    * AudioWorkflow, and to add or remove entries from the corresponding
+    * ParameterRegister.
+    */
+    struct InstrumentRequest :
+        public Request
+    {
+        /**
+        * \struct Result InstrumentRequest.h
+        * This structure is used to store the result of an InstrumentRequest.
+        */
+        struct Result
+        {
+            bool success;
+            unsigned short rackNumber;
+
+            Result();
+
+            Result(bool success, unsigned short rackNumber);
+        };
+
+        enum Type
+        {
+            ADD = 0,
+            REMOVE,
+            NUM_TYPES
+        };
+
+        Type type;
+        unsigned short rackNumber;
+
+        /**
+        * ConnectionRequest that matches the InstrumentRequest, and that instructs
+        * to add or remove connections from the AudioWorkflow the Instrument will be
+        * inserted into or removed from.
+        */
+        ConnectionRequest connectionRequest;
+
+        /**
+        * ParameterRegistrationPlan that matches the InstrumentRequest, and that
+        * instructs to add or remove entries from the ParameterRegister of the
+        * AudioWorkflow the Instrument will be inserted into or removed from.
+        */
+        ParameterRegistrationPlan parameterRegistrationPlan;
+
+        /**
+        * Creates an InstrumentRequest.
+        */
+        InstrumentRequest(Type type, unsigned short rackNumber);
+    };
+
+    /**
+    * \struct SynchronousQueueCenter SynchronousQueueCenter.h
+    * A SynchronousQueueCenter is a Request container for synchronous transfer. It
+    * contains type-specific Request queues that a RequestManager can write into and
+    * that the real-time thread can read. It is thread-safe, so multiple threads can
+    * concurrently write into the center's internal queues through a RequestManager,
+    * while the real-time thread retrieves requests from those same queues.
+    * .
+    * Note that a SynchronousQueueCenter only processes certain types of request,
+    * namely ConnectionRequest and InstrumentRequest. Other types of request, such
+    * as ParameterChangeRequest, should not be sent to a SynchronousQueueCenter and
+    * should be sent directly to the real-time thread instead, as they were meant to
+    * be. Requests of unsupported types will be ignored and thrown away if sent to a
+    * SynchronousQueueCenter.
+    */
+    struct SynchronousQueueCenter
+    {
+        template <class RequestType>
+        using RequestQueue = farbot::fifo<
+            std::shared_ptr<RequestType>,
+            farbot::fifo_options::concurrency::single,
+            farbot::fifo_options::concurrency::multiple,
+            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
+            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
+        >;
+
+        RequestQueue<ConnectionRequest> connectionRequests;
+        RequestQueue<InstrumentRequest> instrumentRequests;
+
+        SynchronousQueueCenter();
+
+        /**
+        * Posts the given Request into the proper queue according to the Request's
+        * type, which is dynamically identified at runtime. Request of unsupported
+        * types will be ignored and thrown away. Supported types are
+        * ConnectionRequest and InstrumentRequest.
+        * .
+        * Note that the pointer \p request passed in argument will be moved
+        * according to the C++ move semantics, so it will become empty once this
+        * method is called.
+        * @param[in] request The Request to be posted in the SynchronousQueueCenter
+        *   for the real-time thread to read.
+        */
+        void push(std::shared_ptr<Request>&& request);
+    };
+
+    /**
+    * \class RequestManager RequestManager.h
+    * A RequestManager handles requests before they are sent to the real-time thread
+    * to be processed. It can either pass requests directly to the real-time thread,
+    * or instead queue requests into a waiting line so that only one request at a
+    * time is processed. Requests that fall into the first category are referred to
+    * as "synchronously" posted requests, while others are "asynchronously" posted.
+    * .
+    * Note that the term "synchronous" here qualifies a request's transfer and not
+    * its execution. In other words, synchronously posted requests have no
+    * guarantee to be executed instantly: they are merely synchronously transferred
+    * to the real-time thread, which will then process it as soon as it can, and not
+    * necessarily right upon reception. In contrast, "asynchronously" posted
+    * requests are transferred to an intermediate, non real-time thread that ensures
+    * all requests have been entirely executed before processing a new one.
+    */
+    class RequestManager
+    {
+    public:
+
+        /**
+        * Creates a RequestManager, and launches a non real-time thread to handle
+        * asynchronous requests.
+        */
+        RequestManager();
+
+        /**
+        * Takes the Request passed in argument and directly pushes it into a queue
+        * for the real-time thread to read. Note that this method does not provide
+        * any guarantee that the request will be executed instantly: the request
+        * will be merely synchronously transferred to the real-time thread. The
+        * latter will process it as soon as it can.
+        * .
+        * Note that the pointer \p request passed in argument will be moved
+        * according to the C++ move semantics, so it will become empty once this
+        * method is called. It is highly recommended to gather all necessary
+        * information on the Request before this method is called, and it is also
+        * strongly advised to avoid trying to access the request pointer later by
+        * keeping a copy of it. Such workaround would interfere with the pointer's
+        * internal reference count, which is used by this method to prevent memory
+        * deallocation from the real-time thread.
+        * @param[in] request The Request to be posted synchronously to the real-time
+        *   thread.
+        */
+        void postRequestSynchronously(std::shared_ptr<Request>&& request);
+
+        /**
+        * Takes the Request passed in argument and moves it into a waiting line for
+        * later processing. The given request will only be processed once all its
+        * predecessors already in the waiting line are executed by the real-time
+        * thread. Although its synchronous counterpart introduces less delay before
+        * processing, this method helps better mitigate risks of failure in the
+        * request processing pipeline.
+        * .
+        * Note that the pointer \p request passed in argument will be moved
+        * according to the C++ move semantics, so it will become empty once this
+        * method is called. It is highly recommended to gather all necessary
+        * information on the Request before this method is called, and it is also
+        * strongly advised to avoid trying to access the request pointer later by
+        * keeping a copy of it. Such workaround would interfere with the pointer's
+        * internal reference count, which is used by this method to prevent memory
+        * deallocation from the real-time thread.
+        * @param[in] request The Request to be posted asynchronously to the
+        *   real-time thread.
+        */
+        void postRequestAsynchronously(std::shared_ptr<Request>&& request);
+
+        /**
+        * Tries to retrieve one ConnectionRequest if available for the real-time
+        * thread to handle. If a ConnectionRequest is effectively available, then
+        * this method will return true, and the available request will be moved from
+        * its container into the \p result pointer reference passed in argument.
+        * Otherwise, this method will return false, and the argument \p result will
+        * be left untouched.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[out] result A valid pointer to a ConnectionRequest if available for
+        *   the real-time thread to read, and the same pointer object as passed in
+        *   argument otherwise.
+        */
+        bool popConnectionRequest(std::shared_ptr<ConnectionRequest>& result);
+
+        /**
+        * Tries to retrieve one InstrumentRequest if available for the real-time
+        * thread to handle. If an InstrumentRequest is effectively available, then
+        * this method will return true, and the available request will be moved from
+        * its container into the \p result pointer reference passed in argument.
+        * Otherwise, this method will return false, and the argument \p result will
+        * be left untouched.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[out] result A valid pointer to an InstrumentRequest if available
+        *   for the real-time thread to read, and the same pointer object as passed
+        *   in argument otherwise.
+        */
+        bool popInstrumentRequest(std::shared_ptr<InstrumentRequest>& result);
+
+    protected:
+
+        typedef farbot::fifo<
+            std::shared_ptr<Request>,
+            farbot::fifo_options::concurrency::single,
+            farbot::fifo_options::concurrency::multiple,
+            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
+            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
+        > RequestQueue;
+
+        /**
+        * \class AsynchronousThread RequestManager.h
+        * An AsynchronousThread is a thread handler that manages asynchronously
+        * posted requests. It provides control over the non real-time thread that
+        * receives and sends requests asynchronously through a waiting line. It is
+        * this object that is responsible for processing only one Request at a time.
+        * .
+        * This class follows the RAII paradigm: when an AsynchronousThread object is
+        * destroyed, its underlying thread is automatically and safely stopped.
+        */
+        class AsynchronousThread
+        {
+        public:
+
+            /**
+            * Creates an AsynchronousThread handler, and stores references of the
+            * request queues that the asynchronous thread will manipulate, but does
+            * not effectively spawn the thread. The start() method must be called
+            * for that to happen.
+            * @param[in] asynchronousQueue A reference to the RequestQueue where to
+            *   pick requests from for sending them to the real-time thread.
+            * @param[in] synchronousQueueCenter A reference to the
+            *   SynchronousQueueCenter where to push requests into for the real-time
+            *   thread.
+            */
+            AsynchronousThread(RequestQueue& asynchronousQueue, SynchronousQueueCenter& synchronousQueueCenter);
+
+            ~AsynchronousThread();
+
+            /**
+            * Instructs to spawn and start the non real-time thread that will handle
+            * asynchronously posted requests.
+            */
+            void start();
+
+            /**
+            * Instructs to stop the non real-time thread that handles asynchronously
+            * posted requests. This method guarantees that the thread will stop in
+            * finite time, but in doing so, it may cause the thread to stop even if
+            * a request is being processed by the real-time thread, thus living it
+            * it into the hands of the latter.
+            */
+            void stop();
+
+        protected:
+
+            /**
+            * Core routine of the non real-time thread that handles asynchronously
+            * posted requests.
+            */
+            void run();
+
+        private:
+            RequestQueue& m_asynchronousQueue;
+            SynchronousQueueCenter& m_synchronousQueueCenter;
+            std::atomic<bool> m_shouldStop;
+            std::atomic<bool> m_hasStopped;
+        };
+
+    private:
+
+        /** Queues for pushing and receiving synchronous requests. */
+        SynchronousQueueCenter m_synchronousQueueCenter;
+
+        /** Queue for pushing and receiving asynchronous requests. */
+        RequestQueue m_asynchronousQueue;
+
+        AsynchronousThread m_asynchronousThread;
+    };
+
+
+
+    /*
+    =================================================
+    Renderer
+    =================================================
+    */
 
     /**
     * \class Renderer Renderer.h
@@ -2160,61 +2481,6 @@ namespace ANGLECORE
     };
 
     /**
-    * \struct InstrumentRequest InstrumentRequest.h
-    * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
-    * an instance of this structure is created to request the Mixer of the
-    * AudioWorkflow to either activate or deactivate the corresponding rack for its
-    * mixing process, to create or remove the necessary connections within the
-    * AudioWorkflow, and to add or remove entries from the corresponding
-    * ParameterRegister.
-    */
-    struct InstrumentRequest
-    {
-        /**
-        * \struct Result InstrumentRequest.h
-        * This structure is used to store the result of an InstrumentRequest.
-        */
-        struct Result
-        {
-            bool success;
-            unsigned short rackNumber;
-
-            Result();
-
-            Result(bool success, unsigned short rackNumber);
-        };
-
-        enum Type
-        {
-            ADD = 0,
-            REMOVE,
-            NUM_TYPES
-        };
-
-        Type type;
-        unsigned short rackNumber;
-
-        /**
-        * ConnectionRequest that matches the InstrumentRequest, and that instructs
-        * to add or remove connections from the AudioWorkflow the Instrument will be
-        * inserted into or removed from.
-        */
-        ConnectionRequest connectionRequest;
-
-        /**
-        * ParameterRegistrationPlan that matches the InstrumentRequest, and that
-        * instructs to add or remove entries from the ParameterRegister of the
-        * AudioWorkflow the Instrument will be inserted into or removed from.
-        */
-        ParameterRegistrationPlan parameterRegistrationPlan;
-
-        /**
-        * Creates an InstrumentRequest.
-        */
-        InstrumentRequest(Type type, unsigned short rackNumber);
-    };
-
-    /**
     * \class Master Master.h
     * Agent that orchestrates the rendering and the interaction with the end-user
     * requests. It should be the only entry point from outside when developping an
@@ -2333,16 +2599,7 @@ namespace ANGLECORE
         AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
-
-        /** Queue for pushing and receiving instrument requests. */
-        farbot::fifo<
-            std::shared_ptr<InstrumentRequest>,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
-        > m_instrumentRequests;
-
+        RequestManager m_requestManager;
         bool m_voiceIsStopping[ANGLECORE_NUM_VOICES];
         StopTracker m_stopTrackers[ANGLECORE_NUM_VOICES];
     };
@@ -2410,71 +2667,11 @@ namespace ANGLECORE
         connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
 
         /*
-        * Finally, we need to send the InstrumentRequest to the Renderer. To avoid
-        * any memory deallocation by the real-time thread after it is done with the
-        * request, we do not pass the request straight to the Renderer. Instead, we
-        * create a copy and send that copy to the latter. Therefore, when the
-        * Renderer is done with the request, it will only delete a copy of a shared
-        * pointer and decrement its reference count by one, signaling to the Master
-        * the request has been processed (and either succeeded or failed), and that
-        * it can be safely destroyed by the non real-time thread that created it.
+        * Finally, we post the InstrumentRequest asynchronously to the
+        * RequestManager:
         */
+        m_requestManager.postRequestAsynchronously(std::move(request));
 
-        /* We copy the InstrumentRequest... */
-        std::shared_ptr<InstrumentRequest> requestCopy = request;
-
-        /* ... And post the copy:*/
-        m_instrumentRequests.push(std::move(requestCopy));
-
-        /*
-        * From now on, the InstrumentRequest is in the hands of the real-time
-        * thread. We cannot access any member of 'request'. We will still use the
-        * reference count of the shared pointer as an indicator of when the
-        * real-time thread is done with the request (although it is not guaranteed
-        * to be safe by the standard). As long as that number is greater than 1
-        * (and, normally, equal to 2), the real-time thread is still in possession
-        * of the copy, and possibly processing it. So the non real-time thread
-        * should wait. When this number reaches 1, it means the real-time thread is
-        * done with the request and the non real-time thread can safely delete it.
-        */
-
-        /*
-        * To avoid infinite loops and therefore deadlocks while waiting for the
-        * real-time thread, we introduce a timeout, using a number of attempts.
-        */
-        const unsigned short timeoutAttempts = 4;
-        unsigned short attempt = 0;
-
-        /*
-        * We then wait for the real-time thread to finish, or for when we reach the
-        * timeout.
-        */
-        while (request.use_count() > 1 && attempt++ < timeoutAttempts)
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-        /*
-        * Once here, we either reached the timeout, or the copy of the
-        * InstrumentRequest has been destroyed, and only the original remains, and
-        * can be safely deleted. In any case, the original request will be deleted,
-        * so if the timeout is the reason for leaving the loop, then the copy will
-        * outlive the original request in the real-time thread, which will trigger
-        * memory deallocation upon destruction, and possibly provoke an audio glitch
-        * (this should actually be very rare). If we left the loop because the copy
-        * was destroyed (which is the common case), then the original will be safely
-        * deleted here by the non real-time thread.
-        */
-
-        /*
-        * We access the 'hasBeenSuccessfullyProcessed' variable that may have been
-        * edited by the real-time thread, in order to determine whether or not the
-        * request was been successfully processed.
-        */
-        bool success = request->connectionRequest.hasBeenSuccessfullyProcessed.load();
-
-        /*
-        * Finally, we return all information we have into an
-        * InstrumentRequest::Result object:
-        */
-        return InstrumentRequest::Result(success, emptyRackNumber);
+        return InstrumentRequest::Result(true, emptyRackNumber);
     }
 }
