@@ -68,18 +68,20 @@ namespace ANGLECORE
         void turnVoiceOff(unsigned short voiceNumber);
 
         /**
-        * Turns the given Rack on and use it in the mix. This method must only be
-        * called by the real-time thread.
-        * @param[in] rackNumber Rack to turn on.
+        * Instructs the Mixer to use the given Rack in the mix.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to activate.
         */
-        void turnRackOn(unsigned short rackNumber);
+        void activateRack(unsigned short rackNumber);
 
         /**
-        * Turns the given Rack off and stop using it in the mix. This method must
-        * only be called by the real-time thread.
-        * @param[in] rackNumber Rack to turn off.
+        * Instructs the Mixer to stop using the given Rack in the mix.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to deactivate.
         */
-        void turnRackOff(unsigned short rackNumber);
+        void deactivateRack(unsigned short rackNumber);
 
     private:
 
@@ -126,7 +128,7 @@ namespace ANGLECORE
         */
         uint32_t m_rackIncrements[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
 
-        /** Tracks the on/off status of every Rack */
-        bool m_rackIsOn[ANGLECORE_NUM_VOICES];
+        /** Tracks the activated/deactivated status of every Rack */
+        bool m_rackIsActivated[ANGLECORE_NUM_VOICES];
     };
 }

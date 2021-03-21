@@ -390,15 +390,15 @@ namespace ANGLECORE
         for (unsigned short i = 0; i < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; i++)
 
             /*
-            * Since the voice may not be full, we need to check if the instrument
-            * rack is empty before accessing the instrument. Note that the rack's
-            * 'isEmpty' member variable is meant for detecting an empty rack that
-            * can be overriden, which does not imply that the underlying instrument
-            * pointer is null. Conversely, we will not take for granted that the
-            * pointer is not null when the rack is tagged as 'non empty', so we
-            * perform a double check:
+            * Since the voice may not be full, we need to check if each of its rack
+            * is activated and non-empty before accessing the instrument inside.
+            * Note that the rack's 'isEmpty' member variable is meant for detecting
+            * an empty rack that can be overriden, which does not imply that the
+            * underlying instrument pointer is null. Conversely, we will not take
+            * for granted that the pointer is not null when the rack is tagged as
+            * 'non empty', so we perform a double check:
             */
-            if (voice.racks[i].isOn && !voice.racks[i].isEmpty && voice.racks[i].instrument)
+            if (voice.racks[i].isActivated && !voice.racks[i].isEmpty && voice.racks[i].instrument)
             {
                 voice.racks[i].instrument->turnOn();
                 voice.racks[i].instrument->reset();
@@ -406,30 +406,27 @@ namespace ANGLECORE
             }
     }
 
-    void AudioWorkflow::turnRackOn(unsigned short rackNumber)
+    void AudioWorkflow::activateRack(unsigned short rackNumber)
     {
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
             Voice& voice = m_voices[v];
 
-            m_voices[v].racks[rackNumber].isOn = true;
+            m_voices[v].racks[rackNumber].isActivated = true;
 
             /*
-            * After we turn the rack on for every voice, we need to check if a voice
+            * After we activate the rack for a voice, we need to check if that voice
             * is already on. If that is the case, then we need to first wake up and
             * prepare the rack's instrument through a reset and start up, so it will
-            * properly render audio once the rack is on.
-            */
-
-            /*
-            * We need to check if the instrument rack is empty before accessing the
-            * instrument (even though when a rack is turned on, it is most likely
-            * because a new instrument was added or an existing instrument is
-            * unmuted). Note that the rack's 'isEmpty' member variable is meant for
-            * detecting an empty rack that can be overriden, which does not imply
-            * that the underlying instrument pointer is null. Conversely, we will
-            * not take for granted that the pointer is not null when the rack is
-            * tagged as 'non empty', so we perform a double check:
+            * properly render audio within the newly activated rack. We also need to
+            * check if the instrument rack is empty before accessing the instrument
+            * (even though when a rack is activated, it is most likely because a new
+            * instrument was added or an existing instrument is unmuted). Note that
+            * the rack's 'isEmpty' member variable is meant for detecting an empty
+            * rack that can be overriden, which does not imply that the underlying
+            * instrument pointer is null. Conversely, we will not take for granted
+            * that the pointer is not null when the rack is tagged as 'non empty',
+            * so we perform a double check.
             */
             if (voice.isOn && !voice.racks[rackNumber].isEmpty && voice.racks[rackNumber].instrument)
             {
@@ -439,15 +436,15 @@ namespace ANGLECORE
             }
         }
 
-        m_mixer->turnRackOn(rackNumber);
+        m_mixer->activateRack(rackNumber);
     }
 
-    void AudioWorkflow::turnRackOff(unsigned short rackNumber)
+    void AudioWorkflow::deactivateRack(unsigned short rackNumber)
     {
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
-            m_voices[v].racks[rackNumber].isOn = false;
+            m_voices[v].racks[rackNumber].isActivated = false;
 
-        m_mixer->turnRackOff(rackNumber);
+        m_mixer->deactivateRack(rackNumber);
     }
 
     uint32_t AudioWorkflow::stopVoice(unsigned short voiceNumber)
@@ -468,14 +465,15 @@ namespace ANGLECORE
         for (unsigned short r = 0; r < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; r++)
         {
             /*
-            * We need to check if the instrument rack is empty before accessing the
-            * instrument. Note that the rack's 'isEmpty' member variable is meant
-            * for detecting an empty rack that can be overriden, which does not
-            * imply that the underlying instrument pointer is null. Conversely, we
-            * will not assume the pointer is not null when the rack is tagged as
-            * 'non empty', so we perform a double check:
+            * We need to check if the instrument rack is activated and non-empty
+            * before accessing the instrument inside to stop it. Note that the
+            * rack's 'isEmpty' member variable is meant for detecting an empty rack
+            * that can be overriden, which does not imply that the underlying
+            * instrument pointer is null. Conversely, we will not assume the pointer
+            * is not null when the rack is tagged as 'non empty', so we perform a
+            * double check:
             */
-            if (voice.racks[r].isOn && !voice.racks[r].isEmpty && voice.racks[r].instrument)
+            if (voice.racks[r].isActivated && !voice.racks[r].isEmpty && voice.racks[r].instrument)
             {
                 /* We first compute the instrument's stop duration in samples */
                 uint32_t instrumentStopDuration = voice.racks[r].instrument->computeStopDurationInSamples();

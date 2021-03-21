@@ -42,7 +42,7 @@ namespace ANGLECORE
         for (unsigned short i = 0; i < ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE; i++)
         {
             m_rackIncrements[i] = ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE - i;
-            m_rackIsOn[i] = false;
+            m_rackIsActivated[i] = false;
         }
     }
 
@@ -105,15 +105,15 @@ namespace ANGLECORE
         updateVoiceIncrements();
     }
 
-    void Mixer::turnRackOn(unsigned short rackNumber)
+    void Mixer::activateRack(unsigned short rackNumber)
     {
-        m_rackIsOn[rackNumber] = true;
+        m_rackIsActivated[rackNumber] = true;
         updateRackIncrements();
     }
 
-    void Mixer::turnRackOff(unsigned short rackNumber)
+    void Mixer::deactivateRack(unsigned short rackNumber)
     {
-        m_rackIsOn[rackNumber] = false;
+        m_rackIsActivated[rackNumber] = false;
         updateRackIncrements();
     }
 
@@ -160,20 +160,20 @@ namespace ANGLECORE
         for (uint32_t i = ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE - 1; i >= 1; i--)
 
             /*
-            * We only mix an instrument rack if the rack is on. If it is, we fix an
-            * increment of 1 after the previous rack. Otherwise, we should skip the
-            * rack, so we fix an increment that ensures we bypass the rack when
-            * traversing the input bus.
+            * We only mix an instrument rack if the rack is activated. If it is, we
+            * fix an increment of 1 after the previous rack. Otherwise, we should
+            * skip the rack, so we fix an increment that ensures we bypass the rack
+            * when traversing the input bus.
             */
-            m_rackIncrements[i - 1] = m_rackIsOn[i] ? 1 : m_rackIncrements[i] + 1;
+            m_rackIncrements[i - 1] = m_rackIsActivated[i] ? 1 : m_rackIncrements[i] + 1;
 
         /*
         * Finally, using the same test as before, we compute the start position
-        * within the list of racks, which may vary depending on the racks' on/off
-        * status. The start position can be 0, if the first rack should be rendered.
-        * Otherwise, we use the precomputed increments to determine the position of
-        * the first rack to mix.
+        * within the list of racks, which may vary depending on the racks'
+        * activation status. The start position can be 0, if the first rack should
+        * be rendered. Otherwise, we use the precomputed increments to determine the
+        * position of the first rack to mix.
         */
-        m_rackStart = m_rackIsOn[0] ? 0 : m_rackIncrements[0];
+        m_rackStart = m_rackIsActivated[0] ? 0 : m_rackIncrements[0];
     }
 }

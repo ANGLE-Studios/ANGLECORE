@@ -1077,18 +1077,20 @@ namespace ANGLECORE
         void turnVoiceOff(unsigned short voiceNumber);
 
         /**
-        * Turns the given Rack on and use it in the mix. This method must only be
-        * called by the real-time thread.
-        * @param[in] rackNumber Rack to turn on.
+        * Instructs the Mixer to use the given Rack in the mix.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to activate.
         */
-        void turnRackOn(unsigned short rackNumber);
+        void activateRack(unsigned short rackNumber);
 
         /**
-        * Turns the given Rack off and stop using it in the mix. This method must
-        * only be called by the real-time thread.
-        * @param[in] rackNumber Rack to turn off.
+        * Instructs the Mixer to stop using the given Rack in the mix.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to deactivate.
         */
-        void turnRackOff(unsigned short rackNumber);
+        void deactivateRack(unsigned short rackNumber);
 
     private:
 
@@ -1135,8 +1137,8 @@ namespace ANGLECORE
         */
         uint32_t m_rackIncrements[ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE];
 
-        /** Tracks the on/off status of every Rack */
-        bool m_rackIsOn[ANGLECORE_NUM_VOICES];
+        /** Tracks the activated/deactivated status of every Rack */
+        bool m_rackIsActivated[ANGLECORE_NUM_VOICES];
     };
 
     /**
@@ -1678,7 +1680,7 @@ namespace ANGLECORE
         {
             bool isEmpty;
             std::shared_ptr<Instrument> instrument;
-            bool isOn;
+            bool isActivated;
         };
 
         bool isFree;
@@ -1809,18 +1811,25 @@ namespace ANGLECORE
         bool playsNoteNumber(unsigned short voiceNumber, unsigned char noteNumber) const;
 
         /**
-        * Requests the Mixer to turn the given Rack on and use it in the mix. This
-        * method must only be called by the real-time thread.
-        * @param[in] rackNumber Rack to turn on.
+        * Activates the given Rack for the Mixer to use it in the mix. This method
+        * may start all instances of the Instrument present in the rack if some
+        * voices are on when this method is called.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to activate.
         */
-        void turnRackOn(unsigned short rackNumber);
+        void activateRack(unsigned short rackNumber);
 
         /**
-        * Requests the Mixer to turn the given Rack off and stop using it in the
-        * mix. This method must only be called by the real-time thread.
-        * @param[in] rackNumber Rack to turn off.
+        * Deactivates the given Rack for the Mixer to stop using it in the mix. Note
+        * that this method merely deactivates the rack, and does not call any method
+        * on any instrument to stop and render its audio tail. Such processing must
+        * therefore be called for beforehand if needed.
+        * .
+        * This method must only be called by the real-time thread.
+        * @param[in] rackNumber Rack to deactivate.
         */
-        void turnRackOff(unsigned short rackNumber);
+        void deactivateRack(unsigned short rackNumber);
 
         /**
         * Requests all the instruments contained in the given Voice to stop playing,

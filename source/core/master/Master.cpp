@@ -342,11 +342,11 @@ namespace ANGLECORE
                 switch (request->type)
                 {
                 case InstrumentRequest::Type::ADD:
-                    m_audioWorkflow.turnRackOn(request->rackNumber);
+                    m_audioWorkflow.activateRack(request->rackNumber);
                     break;
 
                 case InstrumentRequest::Type::REMOVE:
-                    m_audioWorkflow.turnRackOff(request->rackNumber);
+                    m_audioWorkflow.deactivateRack(request->rackNumber);
                     break;
                 }
 
