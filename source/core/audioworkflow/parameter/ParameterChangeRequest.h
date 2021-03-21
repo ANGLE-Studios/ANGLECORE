@@ -24,7 +24,7 @@
 
 #include <stdint.h>
 
-#include "../../config/RenderingConfig.h"
+#include "../../../config/RenderingConfig.h"
 
 namespace ANGLECORE
 {

@@ -29,7 +29,7 @@
 #include "../audioworkflow/voiceassigner/VoiceAssigner.h"
 #include "../../config/RenderingConfig.h"
 #include "../../dependencies/farbot/fifo.h"
-#include "../requests/ConnectionRequest.h"
+#include "../requestmanager/ConnectionRequest.h"
 
 namespace ANGLECORE
 {

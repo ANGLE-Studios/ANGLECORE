@@ -34,9 +34,8 @@
 #include "../audioworkflow/instrument/Instrument.h"
 #include "../../config/RenderingConfig.h"
 #include "../../config/AudioConfig.h"
-#include "../requests/InstrumentRequest.h"
 #include "../../utility/StringView.h"
-#include "../requests/RequestManager.h"
+#include "../requestmanager/RequestManager.h"
 
 namespace ANGLECORE
 {

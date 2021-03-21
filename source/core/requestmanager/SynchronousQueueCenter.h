@@ -27,7 +27,6 @@
 #include "Request.h"
 #include "ConnectionRequest.h"
 #include "InstrumentRequest.h"
-#include "ParameterChangeRequest.h"
 #include "../../dependencies/farbot/fifo.h"
 
 namespace ANGLECORE

@@ -28,7 +28,7 @@
 #include "../workflow/Worker.h"
 #include "Parameter.h"
 #include "../../../dependencies/farbot/fifo.h"
-#include "../../requests/ParameterChangeRequest.h"
+#include "ParameterChangeRequest.h"
 
 namespace ANGLECORE
 {
