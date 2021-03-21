@@ -398,7 +398,7 @@ namespace ANGLECORE
             * pointer is not null when the rack is tagged as 'non empty', so we
             * perform a double check:
             */
-            if (!voice.racks[i].isEmpty && voice.racks[i].instrument)
+            if (voice.racks[i].isOn && !voice.racks[i].isEmpty && voice.racks[i].instrument)
             {
                 voice.racks[i].instrument->turnOn();
                 voice.racks[i].instrument->reset();
@@ -408,15 +408,18 @@ namespace ANGLECORE
 
     void AudioWorkflow::turnRackOn(unsigned short rackNumber)
     {
-        /*
-        * Before we turn the rack on for every voice, we need to check if a voice is
-        * already on. If that is the case, then we need to first wake up and prepare
-        * the rack's instrument through a reset and start up, so it will properly
-        * render audio once the rack is on.
-        */
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
             Voice& voice = m_voices[v];
+
+            m_voices[v].racks[rackNumber].isOn = true;
+
+            /*
+            * After we turn the rack on for every voice, we need to check if a voice
+            * is already on. If that is the case, then we need to first wake up and
+            * prepare the rack's instrument through a reset and start up, so it will
+            * properly render audio once the rack is on.
+            */
 
             /*
             * We need to check if the instrument rack is empty before accessing the
@@ -441,6 +444,9 @@ namespace ANGLECORE
 
     void AudioWorkflow::turnRackOff(unsigned short rackNumber)
     {
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+            m_voices[v].racks[rackNumber].isOn = false;
+
         m_mixer->turnRackOff(rackNumber);
     }
 
@@ -469,7 +475,7 @@ namespace ANGLECORE
             * will not assume the pointer is not null when the rack is tagged as
             * 'non empty', so we perform a double check:
             */
-            if (!voice.racks[r].isEmpty && voice.racks[r].instrument)
+            if (voice.racks[r].isOn && !voice.racks[r].isEmpty && voice.racks[r].instrument)
             {
                 /* We first compute the instrument's stop duration in samples */
                 uint32_t instrumentStopDuration = voice.racks[r].instrument->computeStopDurationInSamples();
