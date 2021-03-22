@@ -1993,16 +1993,6 @@ namespace ANGLECORE
         */
         std::vector<uint32_t> oneIncrements;
 
-        /**
-        * Equals true if the request has been received and successfully executed by
-        * the Renderer. Equals false if the request has not been received, if it is
-        * not valid (its argument do not verify the two properties described in the
-        * ConnectionRequest documentation) and was therefore ignored by the
-        * Renderer, or if at least one of the ConnectionInstruction failed when the
-        * ConnectionPlan was executed.
-        */
-        std::atomic<bool> hasBeenSuccessfullyProcessed;
-
         ConnectionRequest();
     };
 

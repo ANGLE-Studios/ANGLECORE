@@ -26,11 +26,5 @@ namespace ANGLECORE
 {
     ConnectionRequest::ConnectionRequest() :
         Request()
-    {
-        /*
-        * By default, since the request has not been processed yet, its success flag
-        * is set to false.
-        */
-        hasBeenSuccessfullyProcessed.store(false);
-    }
+    {}
 }

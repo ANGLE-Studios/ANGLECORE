@@ -307,10 +307,17 @@ namespace ANGLECORE
                     bool success = m_audioWorkflow.executeConnectionPlan(connectionRequest.plan);
 
                     /*
-                    * ... And notify the Master through the request if the execution
-                    * was a success:
+                    * ... And we trace if the ConnectionRequest's execution was a
+                    * success, using the "success" boolean flag. This flag will
+                    * equal true if the request has been successfully executed by
+                    * the AudioWorkflow. It will equal false if the request is not
+                    * valid (its argument do not verify the two properties described
+                    * in the ConnectionRequest documentation) and was therefore
+                    * ignored by the Master, or if at least one of the
+                    * ConnectionInstruction failed when the ConnectionPlan was
+                    * executed.
                     */
-                    connectionRequest.hasBeenSuccessfullyProcessed.store(success);
+                    connectionRequest.success.store(success);
 
                     /*
                     * If the connection request has failed, it could mean the
@@ -350,7 +357,7 @@ namespace ANGLECORE
                     break;
                 }
 
-                request->success.store(true);
+                request->success.store(connectionRequest.success.load());
                 request->hasBeenProcessed.store(true);
             }
         }
