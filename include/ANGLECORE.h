@@ -2018,20 +2018,6 @@ namespace ANGLECORE
     struct InstrumentRequest :
         public Request
     {
-        /**
-        * \struct Result InstrumentRequest.h
-        * This structure is used to store the result of an InstrumentRequest.
-        */
-        struct Result
-        {
-            bool success;
-            unsigned short rackNumber;
-
-            Result();
-
-            Result(bool success, unsigned short rackNumber);
-        };
-
         enum Type
         {
             ADD = 0,
@@ -2554,7 +2540,7 @@ namespace ANGLECORE
         void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
         template<class InstrumentType>
-        InstrumentRequest::Result addInstrument();
+        unsigned short addInstrument();
 
     protected:
 
@@ -2615,7 +2601,7 @@ namespace ANGLECORE
     };
 
     template<class InstrumentType>
-    InstrumentRequest::Result Master::addInstrument()
+    unsigned short Master::addInstrument()
     {
         std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
 
@@ -2624,10 +2610,11 @@ namespace ANGLECORE
         if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
 
             /*
-            * There is no empty spot, so we stop here and return an unsuccessful
-            * result. We cannot insert a new instrument to the workflow.
+            * There is no empty spot, so we stop here and return the number of
+            * racks, which is an out-of-range index to all Voices' racks that
+            * will signal the caller the operation failed:
             */
-            return InstrumentRequest::Result(false, ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE);
+            return ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE;
 
         /*
         * Otherwise, if we can insert a new instrument, then we need to prepare the
@@ -2682,6 +2669,6 @@ namespace ANGLECORE
         */
         m_requestManager.postRequestAsynchronously(std::move(request));
 
-        return InstrumentRequest::Result(true, emptyRackNumber);
+        return emptyRackNumber;
     }
 }

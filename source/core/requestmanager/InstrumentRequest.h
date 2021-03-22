@@ -42,20 +42,6 @@ namespace ANGLECORE
     struct InstrumentRequest :
         public Request
     {
-        /**
-        * \struct Result InstrumentRequest.h
-        * This structure is used to store the result of an InstrumentRequest.
-        */
-        struct Result
-        {
-            bool success;
-            unsigned short rackNumber;
-
-            Result();
-
-            Result(bool success, unsigned short rackNumber);
-        };
-
         enum Type
         {
             ADD = 0,
