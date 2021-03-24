@@ -79,7 +79,7 @@ namespace ANGLECORE
         * @param[in] numChannels Number of output channels.
         * @param[in] startSample Position to start from in the buffer.
         */
-        void setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample);
+        void setExporterOutput(export_type** buffer, unsigned short numChannels, uint32_t startSample);
 
         /**
         * Tries to find a Rack that is empty in all voices to insert an instrument

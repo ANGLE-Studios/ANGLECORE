@@ -131,7 +131,7 @@ namespace ANGLECORE
         return renderingSequence;
     }
 
-    void AudioWorkflow::setExporterOutput(float** buffer, unsigned short numChannels, uint32_t startSample)
+    void AudioWorkflow::setExporterOutput(export_type** buffer, unsigned short numChannels, uint32_t startSample)
     {
         m_exporter->setOutputBuffer(buffer, numChannels, startSample);
     }
