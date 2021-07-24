@@ -21,7 +21,7 @@
 **********************************************************************/
 
 #include "ConnectionRequest.h"
-#include "../renderer/Renderer.h"
+#include "../../renderer/Renderer.h"
 
 namespace ANGLECORE
 {

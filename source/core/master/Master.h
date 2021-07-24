@@ -36,7 +36,7 @@
 #include "../../config/AudioConfig.h"
 #include "../../utility/StringView.h"
 #include "../requestmanager/RequestManager.h"
-#include "../requestmanager/AddInstrumentRequest.h"
+#include "../requestmanager/requests/AddInstrumentRequest.h"
 
 namespace ANGLECORE
 {

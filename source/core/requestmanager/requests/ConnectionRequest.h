@@ -27,11 +27,11 @@
 #include <stdint.h>
 #include <atomic>
 
-#include "Request.h"
-#include "../audioworkflow/workflow/ConnectionPlan.h"
-#include "../audioworkflow/workflow/Worker.h"
-#include "../audioworkflow/voiceassigner/VoiceAssigner.h"
-#include "../audioworkflow/AudioWorkflow.h"
+#include "../Request.h"
+#include "../../audioworkflow/workflow/ConnectionPlan.h"
+#include "../../audioworkflow/workflow/Worker.h"
+#include "../../audioworkflow/voiceassigner/VoiceAssigner.h"
+#include "../../audioworkflow/AudioWorkflow.h"
 
 namespace ANGLECORE
 {

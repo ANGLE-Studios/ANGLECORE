@@ -22,13 +22,13 @@
 
 #pragma once
 
-#include "Request.h"
-#include "../audioworkflow/AudioWorkflow.h"
-#include "../renderer/Renderer.h"
+#include "../Request.h"
+#include "../../audioworkflow/AudioWorkflow.h"
+#include "../../renderer/Renderer.h"
 #include "ConnectionRequest.h"
-#include "../audioworkflow/ParameterRegistrationPlan.h"
-#include "../../config/AudioConfig.h"
-#include "../../config/RenderingConfig.h"
+#include "../../audioworkflow/ParameterRegistrationPlan.h"
+#include "../../../config/AudioConfig.h"
+#include "../../../config/RenderingConfig.h"
 
 namespace ANGLECORE
 {
