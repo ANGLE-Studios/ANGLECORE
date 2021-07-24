@@ -32,4 +32,14 @@ namespace ANGLECORE
 
     Request::~Request()
     {}
+
+    bool Request::prepare()
+    {
+        /*
+        * By default, requests have no preparation instructions, so we return true
+        * to indicate the preparation went well anyway and the request can now be
+        * processed:
+        */
+        return true;
+    }
 }

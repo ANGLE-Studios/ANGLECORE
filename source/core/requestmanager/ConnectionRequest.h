@@ -31,11 +31,20 @@
 #include "../audioworkflow/workflow/ConnectionPlan.h"
 #include "../audioworkflow/workflow/Worker.h"
 #include "../audioworkflow/voiceassigner/VoiceAssigner.h"
+#include "../audioworkflow/AudioWorkflow.h"
 
 namespace ANGLECORE
 {
+    /*
+    * We use forward declaration here, as both the Renderer and ConnectionRequest
+    * classes depend on each other. Declaring the Renderer class as an incomplete
+    * type should not trigger any compilation error since that class is only used to
+    * declare references within the ConnectionRequest class' declaration.
+    */
+    class Renderer;
+
     /**
-    * \struct ConnectionRequest ConnectionRequest.h
+    * \class ConnectionRequest ConnectionRequest.h
     * Request to execute a ConnectionPlan on a Workflow. A ConnectionRequest
     * contains both the ConnectionPlan and its consequences (the new rendering
     * sequence and voice assignments after the plan is executed), which should be
@@ -48,9 +57,20 @@ namespace ANGLECORE
     * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
     * should be computed from the same ConnectionPlan and by the same AudioWorkflow.
     */
-    struct ConnectionRequest :
+    class ConnectionRequest :
         public Request
     {
+    public:
+        ConnectionRequest(AudioWorkflow& audioWorkflow, Renderer& renderer);
+
+        /**
+        * Creates and removes connections in the AudioWorkflow according to the
+        * Request's ConnectionPlan, and sends updated information to the Renderer
+        * for adapting its next rendering sessions accordingly.
+        */
+        void process();
+
+    public:
         ConnectionPlan plan;
         std::vector<std::shared_ptr<Worker>> newRenderingSequence;
         std::vector<VoiceAssignment> newVoiceAssignments;
@@ -62,6 +82,8 @@ namespace ANGLECORE
         */
         std::vector<uint32_t> oneIncrements;
 
-        ConnectionRequest();
+    private:
+        AudioWorkflow& m_audioWorkflow;
+        Renderer& m_renderer;
     };
 }

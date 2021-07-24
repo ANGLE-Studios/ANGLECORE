@@ -36,12 +36,13 @@
 #include "../../config/AudioConfig.h"
 #include "../../utility/StringView.h"
 #include "../requestmanager/RequestManager.h"
+#include "../requestmanager/AddInstrumentRequest.h"
 
 namespace ANGLECORE
 {
     /**
     * \class Master Master.h
-    * Agent that orchestrates the rendering and the interaction with the end-user
+    * The Master orchestrates the rendering and the interaction with the end-user
     * requests. It should be the only entry point from outside when developping an
     * ANGLECORE-based application.
     */
@@ -103,7 +104,7 @@ namespace ANGLECORE
         void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
         template<class InstrumentType>
-        unsigned short addInstrument();
+        void addInstrument();
 
     protected:
 
@@ -164,74 +165,9 @@ namespace ANGLECORE
     };
 
     template<class InstrumentType>
-    unsigned short Master::addInstrument()
+    void Master::addInstrument()
     {
-        std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
-
-        /* Can we insert a new instrument? We need to find an empty spot first */
-        unsigned short emptyRackNumber = m_audioWorkflow.findEmptyRack();
-        if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
-
-            /*
-            * There is no empty spot, so we stop here and return the number of
-            * racks, which is an out-of-range index to all Voices' racks that
-            * will signal the caller the operation failed:
-            */
-            return ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE;
-
-        /*
-        * Otherwise, if we can insert a new instrument, then we need to prepare the
-        * instrument's environment, as well as a new InstrumentRequest for bridging
-        * the instrument with the real-time rendering pipeline.
-        */
-
-        std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
-        ConnectionRequest& connectionRequest = request->connectionRequest;
-        ConnectionPlan& connectionPlan = connectionRequest.plan;
-        ParameterRegistrationPlan& parameterRegistrationPlan = request->parameterRegistrationPlan;
-
-        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
-        {
-            /*
-            * We create an Instrument of the given type, and then cast it to an
-            * Instrument, to ensure type validity.
-            */
-            std::shared_ptr<Instrument> instrument = std::make_shared<InstrumentType>();
-
-            /*
-            * Then, we insert the Instrument into the Workflow and plan its bridging
-            * to the real-time rendering pipeline.
-            */
-            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, connectionPlan, parameterRegistrationPlan);
-        }
-
-        /*
-        * Once here, we have a ConnectionPlan and a ParameterRegisterPlan ready to
-        * be used in our InstrumentRequest. We now need to precompute the
-        * consequences of executing the ConnectionPlan and connecting all of the
-        * instruments to the AudioWorkflow's real-time rendering pipeline.
-        */
-
-        /*
-        * We first calculate the rendering sequence that will take effect right
-        * after the connection plan is executed.
-        */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(connectionPlan);
-
-        /*
-        * And from that sequence, we can precompute and assign the rest of the
-        * request properties:
-        */
-        connectionRequest.newRenderingSequence = newRenderingSequence;
-        connectionRequest.newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
-        connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
-
-        /*
-        * Finally, we post the InstrumentRequest asynchronously to the
-        * RequestManager:
-        */
+        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer);
         m_requestManager.postRequestAsynchronously(std::move(request));
-
-        return emptyRackNumber;
     }
 }

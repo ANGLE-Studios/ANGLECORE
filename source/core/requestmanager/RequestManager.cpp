@@ -31,8 +31,8 @@
 #define ANGLECORE_REQUESTMANAGER_TIMER_DURATION 50
 
 /*
-* Maximum number of asynchronously posted requests that the RequestManager will be
-* able to handle at once.
+* Maximum number of posted requests that the RequestManager will be able to handle
+* at once.
 */
 #define ANGLECORE_REQUESTMANAGER_QUEUE_SIZE 64
 
@@ -41,9 +41,9 @@ namespace ANGLECORE
     /* AsynchronousThread
     ***************************************************/
 
-    RequestManager::AsynchronousThread::AsynchronousThread(RequestQueue& asynchronousQueue, SynchronousQueueCenter& synchronousQueueCenter) :
+    RequestManager::AsynchronousThread::AsynchronousThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue) :
         m_asynchronousQueue(asynchronousQueue),
-        m_synchronousQueueCenter(synchronousQueueCenter)
+        m_synchronousQueue(synchronousQueue)
     {
         m_shouldStop.store(false);
 
@@ -89,64 +89,88 @@ namespace ANGLECORE
             while (!m_shouldStop.load() && m_asynchronousQueue.pop(request) && request)
             {
                 /*
-                * ... YES! So we need to send that request to the real-time thread
-                * through the synchronous queue. To avoid any memory deallocation by
-                * the real-time thread after it is done with the request, we do not
-                * pass the request straight to the real-time thread. Instead, we
-                * create a copy and send that copy to the latter. Therefore, when
-                * the real-time thread is done with the request, it will only delete
-                * a copy of a shared pointer, and decrement its reference count by
-                * one, signaling to the current non real-time thread the request has
-                * been processed (and either succeeded or failed), and that it can
-                * be safely destroyed by the non real-time thread that created it.
+                * ... YES! So we need to prepare and send that request to the
+                * real-time thread through the synchronous queue.
                 */
 
-                /* We copy the request... */
-                std::shared_ptr<Request> requestCopy = request;
-
-                /* ... And post the copy: */
-                m_synchronousQueueCenter.push(std::move(requestCopy));
+                /* We start by preparing the request */
+                bool preparationSuccess = request->prepare();
 
                 /*
-                * From now on, the request is in the hands of the real-time thread.
-                * We cannot access any member of "request" except the boolean flags
-                * intended to provide information to the non real-time thread. We
-                * use the "hasBeenProcessed" atomic boolean to detect when the
-                * real-time thread is done with the request. In case the request is
-                * processed but for some reason that boolean is never set to true,
-                * we add an extra layer of verification by checking the pointer's
-                * reference count (although it is not guaranteed to be safe by the
-                * standard). If that number is no longer greater than 1, then it
-                * means the real-time thread has processed and destroyed the copy of
-                * the shared pointer, which means we are done with the request.
+                * Did the preparation go well? We only post the request if the
+                * preparation succeeded...
                 */
+                if (preparationSuccess)
+                {
 
-                while (!m_shouldStop.load() && !request->hasBeenProcessed.load() && request.use_count() > 1)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
+                    /*
+                    * ... Yes, the preparation went well, so we can send the request
+                    * to the real-time thread. To avoid any memory deallocation by
+                    * the real-time thread after it is done with the request, we do
+                    * not pass the request straight to the real-time thread.
+                    * Instead, we create a copy and send that copy to the latter.
+                    * Therefore, when the real-time thread is done with the request,
+                    * it will only delete a copy of a shared pointer, and decrement
+                    * its reference count by one, providing an extra signal to the
+                    * current non real-time thread that the request has been
+                    * processed (and either succeeded or failed), and that it can be
+                    * safely destroyed by the non real-time thread that created it.
+                    */
 
-                /*
-                * Once here, provided the current thread has not been instructed to
-                * stop (so m_shouldStop is false), we know the real-time thread has
-                * processed the request, but we do not know which indicator among
-                * the two above (the atomic boolean hasBeenProcessed and the
-                * reference count) has led us to that conclusion. To mitigate the
-                * risk of the real-time thread performing some memory deallocation,
-                * and assuming no extra copy of the request pointer was made
-                * beforehand, we add an extra check on the pointer's reference
-                * count: if that number is still greater than 1 (and, normally,
-                * equal to 2), then it means the real-time thread has not destroyed
-                * the copy yet, so we give it some extra time to delete the shared
-                * pointer. If it is not greater than 1, then we can directly move on
-                * and delete the shared pointer here, which will deallocate memory
-                * on this thread rather than on the real-time thead. This technique
-                * does not guarantee that no memory deallocation will occur on the
-                * real-time thread, though, as we only give a limited amount of time
-                * to the latter for deleting the pointer's copy. But such unwanted
-                * event should be very rare, as deleting a copy of a shared pointer
-                * is a fast operation.
-                */
-                if (request.use_count() > 1)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
+                    /* We copy the request... */
+                    std::shared_ptr<Request> requestCopy = request;
+
+                    /* ... And post the copy: */
+                    m_synchronousQueue.push(std::move(requestCopy));
+
+                    /*
+                    * From now on, the request is in the hands of the real-time
+                    * thread. We cannot access any member of "request" except the
+                    * boolean flags intended to provide information to the non
+                    * real-time thread. We use the "hasBeenProcessed" atomic boolean
+                    * to detect when the real-time thread is done with the request.
+                    * In case the request is processed but for some reason that
+                    * boolean is never set to true, we add an extra layer of
+                    * verification by checking the pointer's reference count
+                    * (although it is not guaranteed to be safe by the standard). If
+                    * that number is no longer greater than 1, then it means the
+                    * real-time thread has processed and destroyed the copy of the
+                    * shared pointer, which means we are done with the request.
+                    */
+
+                    while (!m_shouldStop.load() && !request->hasBeenProcessed.load() && request.use_count() > 1)
+                        std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
+
+                    /*
+                    * Once here, provided the current thread has not been instructed
+                    * to stop (so m_shouldStop is false), we know the real-time
+                    * thread has processed the request, but we do not know which
+                    * indicator among the two above (the atomic boolean
+                    * hasBeenProcessed and the reference count) has led us to that
+                    * conclusion. To mitigate the risk of the real-time thread
+                    * performing some memory deallocation, and assuming no extra
+                    * copy of the request pointer was made beforehand, we add an
+                    * extra check on the pointer's reference count: if that number
+                    * is still greater than 1 (and, normally, equal to 2), then it
+                    * means the real-time thread has not destroyed the copy yet, so
+                    * we give it some extra time to delete the shared pointer. If it
+                    * is not greater than 1, then we can directly move on and delete
+                    * the shared pointer here, which will deallocate memory on this
+                    * thread rather than on the real-time thead. This technique does
+                    * not guarantee that no memory deallocation will occur on the
+                    * real-time thread, though, as we only give a limited amount of
+                    * time to the latter for deleting the pointer's copy. But such
+                    * unwanted event should be very rare, as deleting a copy of a
+                    * shared pointer is a fast operation.
+                    */
+                    if (request.use_count() > 1)
+                        std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
+                }
+                else
+                {
+                    request->success.store(false);
+                    request->hasBeenProcessed.store(true);
+                }
             }
 
             /*
@@ -170,8 +194,9 @@ namespace ANGLECORE
     ***************************************************/
 
     RequestManager::RequestManager() :
+        m_synchronousQueue(ANGLECORE_REQUESTMANAGER_QUEUE_SIZE),
         m_asynchronousQueue(ANGLECORE_REQUESTMANAGER_QUEUE_SIZE),
-        m_asynchronousThread(m_asynchronousQueue, m_synchronousQueueCenter)
+        m_asynchronousThread(m_asynchronousQueue, m_synchronousQueue)
     {
         /* We start the asynchronous thread */
         m_asynchronousThread.start();
@@ -179,8 +204,26 @@ namespace ANGLECORE
 
     void RequestManager::postRequestSynchronously(std::shared_ptr<Request>&& request)
     {
-        /* We post the request to the synchronous queue directly */
-        m_synchronousQueueCenter.push(std::move(request));
+        /* We first prepare the request */
+        bool preparationSuccess = request->prepare();
+
+        /*
+        * Did the preparation go well? We only post the request if the preparation
+        * succeeded...
+        */
+        if (preparationSuccess)
+        {
+            /*
+            * If the preparation succeeded, we then post the request to the
+            * synchronous queue directly.
+            */
+            m_synchronousQueue.push(std::move(request));
+        }
+        else
+        {
+            request->success.store(false);
+            request->hasBeenProcessed.store(true);
+        }
     }
 
     void RequestManager::postRequestAsynchronously(std::shared_ptr<Request>&& request)
@@ -189,13 +232,8 @@ namespace ANGLECORE
         m_asynchronousQueue.push(std::move(request));
     }
 
-    bool RequestManager::popConnectionRequest(std::shared_ptr<ConnectionRequest>& result)
+    bool RequestManager::popRequest(std::shared_ptr<Request>& result)
     {
-        return m_synchronousQueueCenter.connectionRequests.pop(result);
-    }
-
-    bool RequestManager::popInstrumentRequest(std::shared_ptr<InstrumentRequest>& result)
-    {
-        return m_synchronousQueueCenter.instrumentRequests.pop(result);
+        return m_synchronousQueue.pop(result);
     }
 }

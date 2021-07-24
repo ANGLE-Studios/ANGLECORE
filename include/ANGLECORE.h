@@ -1937,6 +1937,28 @@ namespace ANGLECORE
     * When the end-user instructs to change something in the AudioWorkflow, an
     * instance of this structure is created to store all necessary information
     * about that request.
+    * .
+    * The Request structure provides two virtual methods that can be overriden in
+    * derived classes: prepare() and process(). The prepare() method should take
+    * preparation actions and must return a boolean indicating if the preparation
+    * went well. It is always executed on a non real-time thread. The process()
+    * method should contain the core implementation of the Request's execution.
+    * It is a pure virtual method, so it must be implemented in all derived classes.
+    * It is always executed on the real-time thread, so it must be really fast.
+    * .
+    * The prepare() method is guaranteed to always be executed before the process()
+    * method, but the the prepare() method may be executed without the process()
+    * method being called subsequently, typically when the preparation fails.
+    * .
+    * For two different requests both posted asynchronously to the RequestManager,
+    * the prepare() method is guaranteed to always be executed separately and never
+    * concurrently. That guarantee no longer holds for requests posted
+    * synchronously: a request posted synchronously could be prepared in parallel
+    * with another request posted synchronously, or with another request posted
+    * asynchronously, since synchronous posting aims at preparing and transferring
+    * requests upon reception. If concurrency is an issue, a proper locking or sharing
+    * mechanism should be implemented in the prepare() method, or the Request in
+    * question should be posted asynchronously.
     */
     struct Request
     {
@@ -1963,10 +1985,47 @@ namespace ANGLECORE
         * dynamic casting.
         */
         virtual ~Request();
+
+        /**
+        * This method is called by the RequestManager on a non real-time thread to
+        * prepare the Request for its execution, before sending it to the real-time
+        * thread. It must return true if the preparation went well, and false
+        * otherwise, in which case the Request will not be executed and the
+        * process() method will not be called by the RequestManager. By default,
+        * this method returns true.
+        * .
+        * If the Request is posted synchronously, then this method will be called by
+        * the RequestManager on the non real-time thread upon reception, which will
+        * generally give the same result as if the content of the prepare() method
+        * was implemented directly into the process() method. Otherwise, if the
+        * Request is posted asynchronously, then this method will be called by the
+        * RequestManager's asynchronous, non real-time thread.
+        * .
+        * The prepare() method is mostly useful for asynchronously posted requests:
+        * since the RequestManager's asynchronous thread treats only one request at
+        * a time, the prepare() method is guaranteed to always be executed
+        * separately and never concurrently for two different requests both posted
+        * asynchronously.
+        */
+        virtual bool prepare();
+
+        /**
+        * This method is called by the Master on the real-time thread to process the
+        * request. Derived classes of the Request class must implement this method.
+        */
+        virtual void process() = 0;
     };
 
+    /*
+    * We use forward declaration here, as both the Renderer and ConnectionRequest
+    * classes depend on each other. Declaring the Renderer class as an incomplete
+    * type should not trigger any compilation error since that class is only used to
+    * declare references within the ConnectionRequest class' declaration.
+    */
+    class Renderer;
+
     /**
-    * \struct ConnectionRequest ConnectionRequest.h
+    * \class ConnectionRequest ConnectionRequest.h
     * Request to execute a ConnectionPlan on a Workflow. A ConnectionRequest
     * contains both the ConnectionPlan and its consequences (the new rendering
     * sequence and voice assignments after the plan is executed), which should be
@@ -1979,9 +2038,20 @@ namespace ANGLECORE
     * To be consistent, both vectors newRenderingSequence and newVoiceAssignments
     * should be computed from the same ConnectionPlan and by the same AudioWorkflow.
     */
-    struct ConnectionRequest :
+    class ConnectionRequest :
         public Request
     {
+    public:
+        ConnectionRequest(AudioWorkflow& audioWorkflow, Renderer& renderer);
+
+        /**
+        * Creates and removes connections in the AudioWorkflow according to the
+        * Request's ConnectionPlan, and sends updated information to the Renderer
+        * for adapting its next rendering sessions accordingly.
+        */
+        void process();
+
+    public:
         ConnectionPlan plan;
         std::vector<std::shared_ptr<Worker>> newRenderingSequence;
         std::vector<VoiceAssignment> newVoiceAssignments;
@@ -1993,96 +2063,171 @@ namespace ANGLECORE
         */
         std::vector<uint32_t> oneIncrements;
 
-        ConnectionRequest();
+    private:
+        AudioWorkflow& m_audioWorkflow;
+        Renderer& m_renderer;
     };
 
     /**
-    * \struct InstrumentRequest InstrumentRequest.h
-    * When the end-user adds a new Instrument or removes one from an AudioWorkflow,
-    * an instance of this structure is created to request the Mixer of the
-    * AudioWorkflow to either activate or deactivate the corresponding rack for its
-    * mixing process, to create or remove the necessary connections within the
-    * AudioWorkflow, and to add or remove entries from the corresponding
+    * \class AddInstrumentRequest AddInstrumentRequest.h
+    * When the end-user adds a new Instrument to an AudioWorkflow, an instance of
+    * this class is created to request the Mixer of the AudioWorkflow to activate
+    * the corresponding rack for its mixing process, to create the necessary
+    * connections within the AudioWorkflow, and to add entries to the corresponding
     * ParameterRegister.
     */
-    struct InstrumentRequest :
+    template <class InstrumentType>
+    class AddInstrumentRequest :
         public Request
     {
-        enum Type
-        {
-            ADD = 0,
-            REMOVE,
-            NUM_TYPES
-        };
-
-        Type type;
-        unsigned short rackNumber;
+    public:
+        AddInstrumentRequest(AudioWorkflow& audioWorkflow, Renderer& renderer);
+        AddInstrumentRequest(const AddInstrumentRequest<InstrumentType>& other) = delete;
 
         /**
-        * ConnectionRequest that matches the InstrumentRequest, and that instructs
-        * to add or remove connections from the AudioWorkflow the Instrument will be
-        * inserted into or removed from.
+        * Returns true if the preparation went well, that is if a free spot was
+        * found for the Instrument and all the corresponding instances were
+        * successfully created accordingly, and false otherwise.
         */
-        ConnectionRequest connectionRequest;
+        bool prepare() override;
 
         /**
-        * ParameterRegistrationPlan that matches the InstrumentRequest, and that
-        * instructs to add or remove entries from the ParameterRegister of the
-        * AudioWorkflow the Instrument will be inserted into or removed from.
+        * Connects the Instrument instances created during the preparation step to
+        * the real-time rendering pipeline within the AudioWorkflow.
         */
-        ParameterRegistrationPlan parameterRegistrationPlan;
+        void process();
+
+    private:
+        AudioWorkflow& m_audioWorkflow;
+        Renderer& m_renderer;
+
+        unsigned short m_selectedRackNumber;
 
         /**
-        * Creates an InstrumentRequest.
+        * ConnectionRequest that instructs to add connections to the AudioWorkflow
+        * the Instrument will be inserted into.
         */
-        InstrumentRequest(Type type, unsigned short rackNumber);
+        ConnectionRequest m_connectionRequest;
+
+        /**
+        * ParameterRegistrationPlan that instructs to add entries to the
+        * ParameterRegister of the AudioWorkflow the Instrument will be inserted
+        * into.
+        */
+        ParameterRegistrationPlan m_parameterRegistrationPlan;
     };
 
-    /**
-    * \struct SynchronousQueueCenter SynchronousQueueCenter.h
-    * A SynchronousQueueCenter is a Request container for synchronous transfer. It
-    * contains type-specific Request queues that a RequestManager can write into and
-    * that the real-time thread can read. It is thread-safe, so multiple threads can
-    * concurrently write into the center's internal queues through a RequestManager,
-    * while the real-time thread retrieves requests from those same queues.
-    * .
-    * Note that a SynchronousQueueCenter only processes certain types of request,
-    * namely ConnectionRequest and InstrumentRequest. Other types of request, such
-    * as ParameterChangeRequest, should not be sent to a SynchronousQueueCenter and
-    * should be sent directly to the real-time thread instead, as they were meant to
-    * be. Requests of unsupported types will be ignored and thrown away if sent to a
-    * SynchronousQueueCenter.
-    */
-    struct SynchronousQueueCenter
+    template<class InstrumentType>
+    AddInstrumentRequest<InstrumentType>::AddInstrumentRequest(AudioWorkflow& audioWorkflow, Renderer& renderer) :
+        Request(),
+        m_audioWorkflow(audioWorkflow),
+        m_renderer(renderer),
+        m_connectionRequest(audioWorkflow, renderer),
+
+        /*
+        * The selected rack number is initialized to the total number of racks,
+        * which is an out-of-range index to all Voices' racks that signals no racks
+        * has been selected.
+        */
+        m_selectedRackNumber(ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+    {}
+
+    template<class InstrumentType>
+    bool AddInstrumentRequest<InstrumentType>::prepare()
     {
-        template <class RequestType>
-        using RequestQueue = farbot::fifo<
-            std::shared_ptr<RequestType>,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::concurrency::multiple,
-            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
-        >;
+        std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
 
-        RequestQueue<ConnectionRequest> connectionRequests;
-        RequestQueue<InstrumentRequest> instrumentRequests;
+        /* Can we insert a new instrument? We need to find an empty spot first: */
+        unsigned short emptyRackNumber = m_audioWorkflow.findEmptyRack();
+        if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
+        {
+            /*
+            * There is no empty spot, so we stop here and return false to signal the
+            * caller the operation failed:
+            */
+            return false;
+        }
 
-        SynchronousQueueCenter();
+        /* Otherwise, if we found an empty spot, we assign the Instrument to it: */
+        m_selectedRackNumber = emptyRackNumber;
 
-        /**
-        * Posts the given Request into the proper queue according to the Request's
-        * type, which is dynamically identified at runtime. Request of unsupported
-        * types will be ignored and thrown away. Supported types are
-        * ConnectionRequest and InstrumentRequest.
-        * .
-        * Note that the pointer \p request passed in argument will be moved
-        * according to the C++ move semantics, so it will become empty once this
-        * method is called.
-        * @param[in] request The Request to be posted in the SynchronousQueueCenter
-        *   for the real-time thread to read.
+        /*
+        * We then need to create all the Instrument instances and prepare their
+        * environment before connecting the instruments to the real-time rendering
+        * pipeline.
         */
-        void push(std::shared_ptr<Request>&& request);
-    };
+
+        ConnectionPlan& connectionPlan = m_connectionRequest.plan;
+
+        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
+        {
+            /*
+            * We create an Instrument of the given type, and then cast it to an
+            * Instrument, to ensure type validity.
+            */
+            std::shared_ptr<Instrument> instrument = std::make_shared<InstrumentType>();
+
+            /*
+            * Then, we insert the Instrument into the Workflow and plan its bridging
+            * to the real-time rendering pipeline.
+            */
+            m_audioWorkflow.addInstrumentAndPlanBridging(v, m_selectedRackNumber, instrument, connectionPlan, m_parameterRegistrationPlan);
+        }
+
+        /*
+        * Once here, we have a ConnectionPlan and a ParameterRegisterPlan ready to
+        * be used. We now need to precompute the consequences of executing the
+        * ConnectionPlan and connecting all of the instruments to the
+        * AudioWorkflow's real-time rendering pipeline.
+        */
+
+        /*
+        * We first calculate the rendering sequence that will take effect right
+        * after the connection plan is executed.
+        */
+        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(connectionPlan);
+
+        /*
+        * And from that sequence, we can precompute and assign the rest of the
+        * request properties:
+        */
+        m_connectionRequest.newRenderingSequence = newRenderingSequence;
+        m_connectionRequest.newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
+        m_connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
+
+        /*
+        * If we arrive here, then the preparation went well, so we return true for
+        * the Request to be then sent to the real-time thread and processed.
+        */
+        return true;
+    }
+
+    template<class InstrumentType>
+    void AddInstrumentRequest<InstrumentType>::process()
+    {
+        /*
+        * We create all the necessary connections between the Instrument and the
+        * real-time rendering pipeline:
+        */
+        m_connectionRequest.process();
+
+        /*
+        * Then, we ask the AudioWorkflow to execute the parameter registration
+        * plan corresponding to the current request. This will cause the
+        * AudioWorkflow to add some parameters to its registers, so that the
+        * end-user can then change their value through parameter change
+        * requests.
+        */
+        m_audioWorkflow.executeParameterRegistrationPlan(m_parameterRegistrationPlan);
+
+        /*
+        * Once all connections are made, we finish with the update of the racks
+        * in the workflow.
+        */
+        m_audioWorkflow.activateRack(m_selectedRackNumber);
+
+        success.store(m_connectionRequest.success.load());
+    }
 
     /**
     * \class RequestManager RequestManager.h
@@ -2152,34 +2297,19 @@ namespace ANGLECORE
         void postRequestAsynchronously(std::shared_ptr<Request>&& request);
 
         /**
-        * Tries to retrieve one ConnectionRequest if available for the real-time
-        * thread to handle. If a ConnectionRequest is effectively available, then
-        * this method will return true, and the available request will be moved from
-        * its container into the \p result pointer reference passed in argument.
-        * Otherwise, this method will return false, and the argument \p result will
-        * be left untouched.
+        * Tries to retrieve one Request if available for the real-time thread to
+        * handle. If a Request is effectively available, then this method will
+        * return true, and the available request will be moved from its container
+        * into the \p result pointer reference passed in argument. Otherwise, this
+        * method will return false, and the argument \p result will be left
+        * untouched.
         * .
         * This method must only be called by the real-time thread.
-        * @param[out] result A valid pointer to a ConnectionRequest if available for
-        *   the real-time thread to read, and the same pointer object as passed in
+        * @param[out] result A valid pointer to a Request if available for the
+        *   real-time thread to read, and the same pointer object as passed in
         *   argument otherwise.
         */
-        bool popConnectionRequest(std::shared_ptr<ConnectionRequest>& result);
-
-        /**
-        * Tries to retrieve one InstrumentRequest if available for the real-time
-        * thread to handle. If an InstrumentRequest is effectively available, then
-        * this method will return true, and the available request will be moved from
-        * its container into the \p result pointer reference passed in argument.
-        * Otherwise, this method will return false, and the argument \p result will
-        * be left untouched.
-        * .
-        * This method must only be called by the real-time thread.
-        * @param[out] result A valid pointer to an InstrumentRequest if available
-        *   for the real-time thread to read, and the same pointer object as passed
-        *   in argument otherwise.
-        */
-        bool popInstrumentRequest(std::shared_ptr<InstrumentRequest>& result);
+        bool popRequest(std::shared_ptr<Request>& result);
 
     protected:
 
@@ -2216,7 +2346,7 @@ namespace ANGLECORE
             *   SynchronousQueueCenter where to push requests into for the real-time
             *   thread.
             */
-            AsynchronousThread(RequestQueue& asynchronousQueue, SynchronousQueueCenter& synchronousQueueCenter);
+            AsynchronousThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue);
 
             ~AsynchronousThread();
 
@@ -2245,7 +2375,7 @@ namespace ANGLECORE
 
         private:
             RequestQueue& m_asynchronousQueue;
-            SynchronousQueueCenter& m_synchronousQueueCenter;
+            RequestQueue& m_synchronousQueue;
             std::atomic<bool> m_shouldStop;
             std::atomic<bool> m_hasStopped;
         };
@@ -2253,7 +2383,7 @@ namespace ANGLECORE
     private:
 
         /** Queues for pushing and receiving synchronous requests. */
-        SynchronousQueueCenter m_synchronousQueueCenter;
+        RequestQueue m_synchronousQueue;
 
         /** Queue for pushing and receiving asynchronous requests. */
         RequestQueue m_asynchronousQueue;
@@ -2530,7 +2660,7 @@ namespace ANGLECORE
         void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
         template<class InstrumentType>
-        unsigned short addInstrument();
+        void addInstrument();
 
     protected:
 
@@ -2591,74 +2721,9 @@ namespace ANGLECORE
     };
 
     template<class InstrumentType>
-    unsigned short Master::addInstrument()
+    void Master::addInstrument()
     {
-        std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
-
-        /* Can we insert a new instrument? We need to find an empty spot first */
-        unsigned short emptyRackNumber = m_audioWorkflow.findEmptyRack();
-        if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
-
-            /*
-            * There is no empty spot, so we stop here and return the number of
-            * racks, which is an out-of-range index to all Voices' racks that
-            * will signal the caller the operation failed:
-            */
-            return ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE;
-
-        /*
-        * Otherwise, if we can insert a new instrument, then we need to prepare the
-        * instrument's environment, as well as a new InstrumentRequest for bridging
-        * the instrument with the real-time rendering pipeline.
-        */
-
-        std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
-        ConnectionRequest& connectionRequest = request->connectionRequest;
-        ConnectionPlan& connectionPlan = connectionRequest.plan;
-        ParameterRegistrationPlan& parameterRegistrationPlan = request->parameterRegistrationPlan;
-
-        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
-        {
-            /*
-            * We create an Instrument of the given type, and then cast it to an
-            * Instrument, to ensure type validity.
-            */
-            std::shared_ptr<Instrument> instrument = std::make_shared<InstrumentType>();
-
-            /*
-            * Then, we insert the Instrument into the Workflow and plan its bridging
-            * to the real-time rendering pipeline.
-            */
-            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, connectionPlan, parameterRegistrationPlan);
-        }
-
-        /*
-        * Once here, we have a ConnectionPlan and a ParameterRegisterPlan ready to
-        * be used in our InstrumentRequest. We now need to precompute the
-        * consequences of executing the ConnectionPlan and connecting all of the
-        * instruments to the AudioWorkflow's real-time rendering pipeline.
-        */
-
-        /*
-        * We first calculate the rendering sequence that will take effect right
-        * after the connection plan is executed.
-        */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(connectionPlan);
-
-        /*
-        * And from that sequence, we can precompute and assign the rest of the
-        * request properties:
-        */
-        connectionRequest.newRenderingSequence = newRenderingSequence;
-        connectionRequest.newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
-        connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
-
-        /*
-        * Finally, we post the InstrumentRequest asynchronously to the
-        * RequestManager:
-        */
+        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer);
         m_requestManager.postRequestAsynchronously(std::move(request));
-
-        return emptyRackNumber;
     }
 }

@@ -26,7 +26,7 @@
 #include <atomic>
 
 #include "Request.h"
-#include "SynchronousQueueCenter.h"
+#include "../../dependencies/farbot/fifo.h"
 
 namespace ANGLECORE
 {
@@ -98,34 +98,19 @@ namespace ANGLECORE
         void postRequestAsynchronously(std::shared_ptr<Request>&& request);
 
         /**
-        * Tries to retrieve one ConnectionRequest if available for the real-time
-        * thread to handle. If a ConnectionRequest is effectively available, then
-        * this method will return true, and the available request will be moved from
-        * its container into the \p result pointer reference passed in argument.
-        * Otherwise, this method will return false, and the argument \p result will
-        * be left untouched.
+        * Tries to retrieve one Request if available for the real-time thread to
+        * handle. If a Request is effectively available, then this method will
+        * return true, and the available request will be moved from its container
+        * into the \p result pointer reference passed in argument. Otherwise, this
+        * method will return false, and the argument \p result will be left
+        * untouched.
         * .
         * This method must only be called by the real-time thread.
-        * @param[out] result A valid pointer to a ConnectionRequest if available for
-        *   the real-time thread to read, and the same pointer object as passed in
+        * @param[out] result A valid pointer to a Request if available for the
+        *   real-time thread to read, and the same pointer object as passed in
         *   argument otherwise.
         */
-        bool popConnectionRequest(std::shared_ptr<ConnectionRequest>& result);
-
-        /**
-        * Tries to retrieve one InstrumentRequest if available for the real-time
-        * thread to handle. If an InstrumentRequest is effectively available, then
-        * this method will return true, and the available request will be moved from
-        * its container into the \p result pointer reference passed in argument.
-        * Otherwise, this method will return false, and the argument \p result will
-        * be left untouched.
-        * .
-        * This method must only be called by the real-time thread.
-        * @param[out] result A valid pointer to an InstrumentRequest if available
-        *   for the real-time thread to read, and the same pointer object as passed
-        *   in argument otherwise.
-        */
-        bool popInstrumentRequest(std::shared_ptr<InstrumentRequest>& result);
+        bool popRequest(std::shared_ptr<Request>& result);
 
     protected:
 
@@ -162,7 +147,7 @@ namespace ANGLECORE
             *   SynchronousQueueCenter where to push requests into for the real-time
             *   thread.
             */
-            AsynchronousThread(RequestQueue& asynchronousQueue, SynchronousQueueCenter& synchronousQueueCenter);
+            AsynchronousThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue);
 
             ~AsynchronousThread();
 
@@ -191,7 +176,7 @@ namespace ANGLECORE
 
         private:
             RequestQueue& m_asynchronousQueue;
-            SynchronousQueueCenter& m_synchronousQueueCenter;
+            RequestQueue& m_synchronousQueue;
             std::atomic<bool> m_shouldStop;
             std::atomic<bool> m_hasStopped;
         };
@@ -199,7 +184,7 @@ namespace ANGLECORE
     private:
 
         /** Queues for pushing and receiving synchronous requests. */
-        SynchronousQueueCenter m_synchronousQueueCenter;
+        RequestQueue m_synchronousQueue;
 
         /** Queue for pushing and receiving asynchronous requests. */
         RequestQueue m_asynchronousQueue;
