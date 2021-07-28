@@ -26,7 +26,8 @@
 #include "RequestManager.h"
 
 /*
-* Small time duration, in milliseconds, used to pause the asynchronous thread.
+* Small time duration, in milliseconds, used to pause the asynchronous posting
+* thread.
 */
 #define ANGLECORE_REQUESTMANAGER_TIMER_DURATION 50
 
@@ -38,55 +39,23 @@
 
 namespace ANGLECORE
 {
-    /* AsynchronousThread
+    /* AsynchronousPostingThread
     ***************************************************/
 
-    RequestManager::AsynchronousThread::AsynchronousThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue) :
+    RequestManager::AsynchronousPostingThread::AsynchronousPostingThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue) :
+        Thread(),
         m_asynchronousQueue(asynchronousQueue),
         m_synchronousQueue(synchronousQueue)
+    {}
+
+    void RequestManager::AsynchronousPostingThread::run()
     {
-        m_shouldStop.store(false);
-
-        /*
-        * By default, we initialize m_hasStopped to true, so that if for some reason
-        * the AsynchronousThread object is destroyed without the start() method
-        * being called beforehand, the destructor can safely and properly exit.
-        */
-        m_hasStopped.store(true);
-    }
-
-    RequestManager::AsynchronousThread::~AsynchronousThread()
-    {
-        /* We instruct the thread to stop: */
-        stop();
-
-        /* And we wait for the thread to effectively stop... */
-        while (!m_hasStopped.load())
-            std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
-    }
-
-    void RequestManager::AsynchronousThread::start()
-    {
-        std::thread thread(&AsynchronousThread::run, this);
-        thread.detach();
-    }
-
-    void RequestManager::AsynchronousThread::stop()
-    {
-        m_shouldStop.store(true);
-    }
-
-    void RequestManager::AsynchronousThread::run()
-    {
-        /* The thread has just started, so we set the m_hasStopped flag to false: */
-        m_hasStopped.store(false);
-
         std::shared_ptr<Request> request;
 
-        while (!m_shouldStop.load())
+        while (!shouldStop())
         {
             /* Have we received any request in the asynchronous queue? ... */
-            while (!m_shouldStop.load() && m_asynchronousQueue.pop(request) && request)
+            while (!shouldStop() && m_asynchronousQueue.pop(request) && request)
             {
                 /*
                 * ... YES! So we need to prepare and send that request to the
@@ -138,7 +107,7 @@ namespace ANGLECORE
                     * shared pointer, which means we are done with the request.
                     */
 
-                    while (!m_shouldStop.load() && !request->hasBeenProcessed.load() && request.use_count() > 1)
+                    while (!shouldStop() && !request->hasBeenProcessed.load() && request.use_count() > 1)
                         std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
 
                     /*
@@ -180,14 +149,6 @@ namespace ANGLECORE
             */
             std::this_thread::sleep_for(std::chrono::milliseconds(ANGLECORE_REQUESTMANAGER_TIMER_DURATION));
         }
-
-        /*
-        * If we arrive here, it means the thread is being stopped, and we stopped
-        * processing requests. Therefore, we need to indicate the AsynchronousThread
-        * handler that it can delete its resources if needed, using the atomic
-        * boolean flag "m_hasStopped":
-        */
-        m_hasStopped.store(true);
     }
 
     /* RequestManager
@@ -196,10 +157,10 @@ namespace ANGLECORE
     RequestManager::RequestManager() :
         m_synchronousQueue(ANGLECORE_REQUESTMANAGER_QUEUE_SIZE),
         m_asynchronousQueue(ANGLECORE_REQUESTMANAGER_QUEUE_SIZE),
-        m_asynchronousThread(m_asynchronousQueue, m_synchronousQueue)
+        m_asynchronousPostingThread(m_asynchronousQueue, m_synchronousQueue)
     {
         /* We start the asynchronous thread */
-        m_asynchronousThread.start();
+        m_asynchronousPostingThread.start();
     }
 
     void RequestManager::postRequestSynchronously(std::shared_ptr<Request>&& request)

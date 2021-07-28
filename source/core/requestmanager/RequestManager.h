@@ -27,6 +27,7 @@
 
 #include "Request.h"
 #include "../../dependencies/farbot/fifo.h"
+#include "../../utility/Thread.h"
 
 namespace ANGLECORE
 {
@@ -123,48 +124,29 @@ namespace ANGLECORE
         > RequestQueue;
 
         /**
-        * \class AsynchronousThread RequestManager.h
-        * An AsynchronousThread is a thread handler that manages asynchronously
-        * posted requests. It provides control over the non real-time thread that
-        * receives and sends requests asynchronously through a waiting line. It is
-        * this object that is responsible for processing only one Request at a time.
-        * .
-        * This class follows the RAII paradigm: when an AsynchronousThread object is
-        * destroyed, its underlying thread is automatically and safely stopped.
+        * \class AsynchronousPostingThread RequestManager.h
+        * An AsynchronousPostingThread is a thread handler that manages
+        * asynchronously posted requests. It provides control over the non real-time
+        * thread that receives and sends requests asynchronously through a waiting
+        * line. It is this object that is responsible for processing only one
+        * Request at a time.
         */
-        class AsynchronousThread
+        class AsynchronousPostingThread :
+            public Thread
         {
         public:
 
             /**
-            * Creates an AsynchronousThread handler, and stores references of the
-            * request queues that the asynchronous thread will manipulate, but does
-            * not effectively spawn the thread. The start() method must be called
-            * for that to happen.
+            * Creates an thread handler for asynchronously posting requests, and
+            * stores references of the request queues that the thread will
+            * manipulate, but does not effectively spawn the thread. The start()
+            * method must be called for that to happen.
             * @param[in] asynchronousQueue A reference to the RequestQueue where to
             *   pick requests from for sending them to the real-time thread.
-            * @param[in] synchronousQueueCenter A reference to the
-            *   SynchronousQueueCenter where to push requests into for the real-time
-            *   thread.
+            * @param[in] synchronousQueue A reference to the RequestQueue where to
+            *   push requests into for the real-time thread.
             */
-            AsynchronousThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue);
-
-            ~AsynchronousThread();
-
-            /**
-            * Instructs to spawn and start the non real-time thread that will handle
-            * asynchronously posted requests.
-            */
-            void start();
-
-            /**
-            * Instructs to stop the non real-time thread that handles asynchronously
-            * posted requests. This method guarantees that the thread will stop in
-            * finite time, but in doing so, it may cause the thread to stop even if
-            * a request is being processed by the real-time thread, thus living it
-            * it into the hands of the latter.
-            */
-            void stop();
+            AsynchronousPostingThread(RequestQueue& asynchronousQueue, RequestQueue& synchronousQueue);
 
         protected:
 
@@ -177,8 +159,6 @@ namespace ANGLECORE
         private:
             RequestQueue& m_asynchronousQueue;
             RequestQueue& m_synchronousQueue;
-            std::atomic<bool> m_shouldStop;
-            std::atomic<bool> m_hasStopped;
         };
 
     private:
@@ -189,6 +169,6 @@ namespace ANGLECORE
         /** Queue for pushing and receiving asynchronous requests. */
         RequestQueue m_asynchronousQueue;
 
-        AsynchronousThread m_asynchronousThread;
+        AsynchronousPostingThread m_asynchronousPostingThread;
     };
 }
