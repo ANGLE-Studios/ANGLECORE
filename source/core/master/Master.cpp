@@ -296,6 +296,12 @@ namespace ANGLECORE
 
             request->process();
             request->hasBeenProcessed.store(true);
+
+            /*
+            * Afterwards, we send the request back to the RequestManager for
+            * postprocessing and deletion.
+            */
+            m_requestManager.postProcessedRequest(std::move(request));
         }
     }
 

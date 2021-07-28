@@ -49,14 +49,14 @@ namespace ANGLECORE
         AddInstrumentRequest(const AddInstrumentRequest<InstrumentType>& other) = delete;
 
         /**
-        * Returns true if the preparation went well, that is if a free spot was
+        * Returns true if the preprocessing went well, that is if a free spot was
         * found for the Instrument and all the corresponding instances were
         * successfully created accordingly, and false otherwise.
         */
-        bool prepare() override;
+        bool preprocess() override;
 
         /**
-        * Connects the Instrument instances created during the preparation step to
+        * Connects the Instrument instances created during the preprocessing step to
         * the real-time rendering pipeline within the AudioWorkflow.
         */
         void process();
@@ -97,7 +97,7 @@ namespace ANGLECORE
     {}
 
     template<class InstrumentType>
-    bool AddInstrumentRequest<InstrumentType>::prepare()
+    bool AddInstrumentRequest<InstrumentType>::preprocess()
     {
         std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
 

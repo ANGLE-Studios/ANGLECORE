@@ -52,8 +52,10 @@ namespace ANGLECORE
     public:
 
         /**
-        * Creates a RequestManager, and launches a non real-time thread to handle
-        * asynchronous requests.
+        * Creates a RequestManager, and launches two non real-time threads: one
+        * AsynchronousPostingThread for handling asynchronously posted requests, and
+        * one PostProcessingThread for receiving requests from the real-time thread
+        * and postprocessing them.
         */
         RequestManager();
 
@@ -113,6 +115,21 @@ namespace ANGLECORE
         */
         bool popRequest(std::shared_ptr<Request>& result);
 
+        /**
+        * Takes the Request passed in argument and sends it to the non real-time
+        * PostProcessingThread for final processing and deletion. The Request passed
+        * in argument must have already been processed, that is its process() method
+        * should have been called before.
+        * .
+        * Note that the pointer \p request passed in argument will be moved
+        * according to the C++ move semantics, so it will become empty once this
+        * method is called.
+        * @param[in] request The processed Request, on which the process() method
+        *   must have been called before, to be posted to the non real-time
+        *   PostProcessingThread.
+        */
+        void postProcessedRequest(std::shared_ptr<Request>&& request);
+
     protected:
 
         typedef farbot::fifo<
@@ -161,14 +178,53 @@ namespace ANGLECORE
             RequestQueue& m_synchronousQueue;
         };
 
+        /**
+        * \class PostProcessingThread RequestManager.h
+        * A PostProcessingThread is a thread handler that receives requests from the
+        * real-time thread after they are processed. It provides control over the
+        * non real-time thread that handles these processed requests and call their
+        * postprocess() method before deleting them.
+        */
+        class PostProcessingThread :
+            public Thread
+        {
+        public:
+
+            /**
+            * Creates an thread handler for processed requests, and stores
+            * references of the request queue that will receive those requests from
+            * the real-time thread, but does not effectively spawn the thread. The
+            * start() method must be called for that to happen.
+            * @param[in] processedRequests A reference to the RequestQueue where to
+            *   pick requests from for postprocessing.
+            */
+            PostProcessingThread(RequestQueue& processedRequests);
+
+        protected:
+
+            /**
+            * Core routine of the non real-time thread that handles processed
+            * requests.
+            */
+            void run();
+
+        private:
+            RequestQueue& m_processedRequests;
+        };
+
     private:
 
-        /** Queues for pushing and receiving synchronous requests. */
+        /** Queues for pushing synchronously posted requests. */
         RequestQueue m_synchronousQueue;
 
-        /** Queue for pushing and receiving asynchronous requests. */
+        /** Queue for pushing and retrieving asynchronously posted requests. */
         RequestQueue m_asynchronousQueue;
 
         AsynchronousPostingThread m_asynchronousPostingThread;
+
+        /** Queues for already processed requests. */
+        RequestQueue m_processedRequests;
+
+        PostProcessingThread m_postProcessingThread;
     };
 }

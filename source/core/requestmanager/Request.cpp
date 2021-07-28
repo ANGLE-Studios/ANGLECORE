@@ -26,14 +26,13 @@ namespace ANGLECORE
 {
     Request::Request()
     {
+        hasBeenPreprocessed.store(false);
         hasBeenProcessed.store(false);
         success.store(false);
+        hasBeenPostprocessed.store(false);
     }
 
-    Request::~Request()
-    {}
-
-    bool Request::prepare()
+    bool Request::preprocess()
     {
         /*
         * By default, requests have no preparation instructions, so we return true
@@ -41,5 +40,10 @@ namespace ANGLECORE
         * processed:
         */
         return true;
+    }
+
+    void Request::postprocess()
+    {
+        /* By default, requests do not perform any postprocessing. */
     }
 }
