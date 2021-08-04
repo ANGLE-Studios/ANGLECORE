@@ -26,10 +26,9 @@
 #include "RequestManager.h"
 
 /*
-* Small time duration, in milliseconds, used to pause the asynchronous posting
-* thread.
+* Small time duration, in milliseconds, used to pause the non real-time threads.
 */
-#define ANGLECORE_REQUESTMANAGER_TIMER_DURATION 50
+#define ANGLECORE_REQUESTMANAGER_TIMER_DURATION 25
 
 /*
 * Maximum number of posted requests that the RequestManager will be able to handle
