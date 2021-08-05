@@ -29,7 +29,7 @@
 * Small time duration, in milliseconds, used to pause the calling thread when
 * spinning and waiting for the internal thread to terminate.
 */
-#define ANGLECORE_THREAD_WAITING_LOOP_DURATION 50
+#define ANGLECORE_THREAD_WAITING_LOOP_DURATION 25
 
 namespace ANGLECORE
 {
