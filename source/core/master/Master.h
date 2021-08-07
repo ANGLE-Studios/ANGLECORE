@@ -103,8 +103,62 @@ namespace ANGLECORE
         */
         void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
+        /**
+        * Requests the Master to add an Instrument of the given type to the
+        * AudioWorkflow. The type given as a template parameter must be a class that
+        * inherits from the Instrument class.
+        * 
+        * Behind the scenes, this method creates an AddInstrumentRequest object and
+        * passes it to an internal RequestManager that handles requests
+        * asynchronously. The AddInstrumentRequest instructs to create and plug in
+        * as many instances of the given class as they are voices in the
+        * AudioWorkflow, so that each instance can play a separate note when
+        * necessary.
+        * 
+        * This method is thread-safe: multiple requests to add an Instrument can be
+        * submitted in parallel, as all requests are queued and safely processed one
+        * after the other by the RequestManager.
+        * 
+        * Note that this method only makes a request and does not perform any
+        * computation. It always returns instantly, and does not wait for the
+        * AddInstrumentRequest to be executed and for all the instrument instances
+        * to be added. Because of this asynchronous implementation, this method does
+        * not provide any feedback on how the execution went. To retrieve such
+        * information, create an AddInstrumentRequest::Listener and use the
+        * alternative version of
+        * addInstrument(AddInstrumentListener<InstrumentType>* listener) instead.
+        */
         template<class InstrumentType>
         void addInstrument();
+
+        /**
+        * Requests the Master to add an Instrument of the given type to the
+        * AudioWorkflow. The type given as a template parameter must be a class that
+        * inherits from the Instrument class.
+        * 
+        * Behind the scenes, this method creates an AddInstrumentRequest object and
+        * passes it to an internal RequestManager that handles requests
+        * asynchronously. The AddInstrumentRequest instructs to create and plug in
+        * as many instances of the given class as they are voices in the
+        * AudioWorkflow, so that each instance can play a separate note when
+        * necessary.
+        * 
+        * This method is thread-safe: multiple requests to add an Instrument can be
+        * submitted in parallel, as all requests are queued and safely processed one
+        * after the other by the RequestManager.
+        *
+        * Note that this method only makes a request and does not perform any
+        * computation. It always returns instantly, and does not wait for the
+        * AddInstrumentRequest to be executed and for all the instrument instances
+        * to be added. The AddInstrumentRequest::Listener passed in parameter will
+        * precisely be called once that point is reached to take over.
+        * @param[in] listener The listener to call back when the request to add the
+        *   new Instrument is executed. If this pointer is null, then no listener
+        *   will be called and this method will have the same effect as its
+        *   argument-less counterpart addInstrument().
+        */
+        template<class InstrumentType>
+        void addInstrument(AddInstrumentListener<InstrumentType>* listener);
 
     protected:
 
@@ -167,7 +221,13 @@ namespace ANGLECORE
     template<class InstrumentType>
     void Master::addInstrument()
     {
-        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer);
+        addInstrument<InstrumentType>(nullptr);
+    }
+
+    template<class InstrumentType>
+    void Master::addInstrument(AddInstrumentListener<InstrumentType>* listener)
+    {
+        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer, listener);
         m_requestManager.postRequestAsynchronously(std::move(request));
     }
 }

@@ -2375,7 +2375,91 @@ namespace ANGLECORE
         public Request
     {
     public:
+
+        /**
+        * \struct Listener AddInstrumentRequest.h
+        * Since requests are processed asynchronously, information on their
+        * execution is not available immediately upon posting. As a consequence,
+        * ANGLECORE implements a broadcaster-listener mechanism for every type of
+        * Request, so that all requests can send information back to their caller.
+        *
+        * In that context, the AddInstrumentRequest::Listener structure defines the
+        * listener associated with the AddInstrumentRequest class. An
+        * AddInstrumentRequest::Listener can be attached to an AddInstrumentRequest
+        * object based on the same Instrument class. Once the attachement is made,
+        * the AddInstrumentRequest::Listener will be called by the RequestManager
+        * during postprocessing to receive information about how the Instrument's
+        * insertion went. Note that such attachment is not mandatory for the request
+        * to be processed: an AddInstrumentRequest can be posted to the
+        * RequestManager without any listener, in which case the RequestManager will
+        * not signal when the request is processed.
+        *
+        * The AddInstrumentRequest::Listener structure provides two pure virtual
+        * callback methods that must be implemented in derived classes:
+        * addedInstrument() and failedToAddInstrument(). Only one of these two
+        * methods will be called by the RequestManager, depending on how the
+        * execution went. If the AddInstrumentRequest is successfully processed, and
+        * the corresponding Instrument objects successfully created and inserted
+        * into the AudioWorkflow, then the addedInstrument() method will be called.
+        * Otherwise, if the processing fails, then the failedToAddInstrument()
+        * method will be called. Both of these methods are always called on one of
+        * the RequestManager's non real-time threads.
+        */
+        struct Listener
+        {
+            /**
+            * This method serves as a callback for the AddInstrumentRequest being
+            * listened to. It is called during postprocessing and only if the
+            * request was successfully executed, that is if the Instrument objects
+            * were all successfully created and inserted into the AudioWorkflow. In
+            * this case, this method is called by one of the RequestManager's non
+            * real-time threads during the request's postprocessing.
+            *
+            * If the AddInstrumentRequest being listened to does not succeed in its
+            * execution, then the failedToAddInstrument() method will be called
+            * instead.
+            * @param[in] selectedRackNumber The rack number where the Instrument has
+            *   been inserted.
+            * @param[in] sourceRequest A reference to the request being listened to,
+            *   which is at the origin of this callback. This parameter can be used
+            *   to retrieve information about how the request's execution went, or
+            *   to differentiate implementation between instrument types.
+            */
+            virtual void addedInstrument(unsigned short selectedRackNumber, const AddInstrumentRequest<InstrumentType>& sourceRequest) = 0;
+
+            /**
+            * This method serves as a callback for the AddInstrumentRequest being
+            * listened to. It is called during postprocessing and only if the
+            * request was not executed correctly, and failed during either
+            * preprocessing or processing.
+            *
+            * The preprocessing step will fail if there are no free slots available
+            * for inserting a new Instrument, or if an error occurs during the
+            * preparation of the AudioWorkflow. The processing step will fail if an
+            * error occurs when changing the connections of the AudioWorkflow to
+            * link all the new Instrument objects to the real-time rendering
+            * pipeline. In either case, this method will be called by one of the
+            * RequestManager's non real-time threads during the request's
+            * postprocessing.
+            *
+            * If the AddInstrumentRequest being listened does succeed in its
+            * execution, then the addedInstrument() method will be called instead.
+            * @param[in] intendedRackNumber The rack number that was selected during
+            *   preprocessing for inserting the new Instrument. If that number is
+            *   equal to or greater than the maximum number of instruments
+            *   (ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE), then it means there were
+            *   no spots left for inserting the new Instrument.
+            * @param[in] sourceRequest A reference to the request being listened to,
+            *   which is at the origin of this callback. This parameter can be used
+            *   to retrieve information about what went wrong during the request's
+            *   execution, or to differentiate implementation between instrument
+            *   types.
+            */
+            virtual void failedToAddInstrument(unsigned short intendedRackNumber, const AddInstrumentRequest<InstrumentType>& sourceRequest) = 0;
+        };
+
         AddInstrumentRequest(AudioWorkflow& audioWorkflow, Renderer& renderer);
+        AddInstrumentRequest(AudioWorkflow& audioWorkflow, Renderer& renderer, Listener* listener);
         AddInstrumentRequest(const AddInstrumentRequest<InstrumentType>& other) = delete;
 
         /**
@@ -2391,9 +2475,16 @@ namespace ANGLECORE
         */
         void process();
 
+        /**
+        * Calls the request's Listener to send information about how the request's
+        * execution went.
+        */
+        void postprocess() override;
+
     private:
         AudioWorkflow& m_audioWorkflow;
         Renderer& m_renderer;
+        Listener* m_listener;
 
         unsigned short m_selectedRackNumber;
 
@@ -2413,9 +2504,15 @@ namespace ANGLECORE
 
     template<class InstrumentType>
     AddInstrumentRequest<InstrumentType>::AddInstrumentRequest(AudioWorkflow& audioWorkflow, Renderer& renderer) :
+        AddInstrumentRequest<InstrumentType>(audioWorkflow, renderer, nullptr)
+    {}
+
+    template<class InstrumentType>
+    AddInstrumentRequest<InstrumentType>::AddInstrumentRequest(AudioWorkflow& audioWorkflow, Renderer& renderer, Listener* listener) :
         Request(),
         m_audioWorkflow(audioWorkflow),
         m_renderer(renderer),
+        m_listener(listener),
         m_connectionRequest(audioWorkflow, renderer),
 
         /*
@@ -2522,6 +2619,22 @@ namespace ANGLECORE
 
         success.store(m_connectionRequest.success.load());
     }
+
+    template<class InstrumentType>
+    void AddInstrumentRequest<InstrumentType>::postprocess()
+    {
+        if (m_listener)
+        {
+            if (hasBeenPreprocessed.load() && hasBeenProcessed.load() && success.load())
+                m_listener->addedInstrument(m_selectedRackNumber, *this);
+            else
+                m_listener->failedToAddInstrument(m_selectedRackNumber, *this);
+        }
+    }
+
+    /** Handy short name for listeners of AddInstrumentRequest objects */
+    template<class InstrumentType>
+    using AddInstrumentListener = typename AddInstrumentRequest<InstrumentType>::Listener;
 
 
 
@@ -2730,7 +2843,7 @@ namespace ANGLECORE
 
     /**
     * \class Master Master.h
-    * Agent that orchestrates the rendering and the interaction with the end-user
+    * The Master orchestrates the rendering and the interaction with the end-user
     * requests. It should be the only entry point from outside when developping an
     * ANGLECORE-based application.
     */
@@ -2791,8 +2904,62 @@ namespace ANGLECORE
         */
         void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
+        /**
+        * Requests the Master to add an Instrument of the given type to the
+        * AudioWorkflow. The type given as a template parameter must be a class that
+        * inherits from the Instrument class.
+        *
+        * Behind the scenes, this method creates an AddInstrumentRequest object and
+        * passes it to an internal RequestManager that handles requests
+        * asynchronously. The AddInstrumentRequest instructs to create and plug in
+        * as many instances of the given class as they are voices in the
+        * AudioWorkflow, so that each instance can play a separate note when
+        * necessary.
+        *
+        * This method is thread-safe: multiple requests to add an Instrument can be
+        * submitted in parallel, as all requests are queued and safely processed one
+        * after the other by the RequestManager.
+        *
+        * Note that this method only makes a request and does not perform any
+        * computation. It always returns instantly, and does not wait for the
+        * AddInstrumentRequest to be executed and for all the instrument instances
+        * to be added. Because of this asynchronous implementation, this method does
+        * not provide any feedback on how the execution went. To retrieve such
+        * information, create an AddInstrumentRequest::Listener and use the
+        * alternative version of
+        * addInstrument(AddInstrumentListener<InstrumentType>* listener) instead.
+        */
         template<class InstrumentType>
         void addInstrument();
+
+        /**
+        * Requests the Master to add an Instrument of the given type to the
+        * AudioWorkflow. The type given as a template parameter must be a class that
+        * inherits from the Instrument class.
+        *
+        * Behind the scenes, this method creates an AddInstrumentRequest object and
+        * passes it to an internal RequestManager that handles requests
+        * asynchronously. The AddInstrumentRequest instructs to create and plug in
+        * as many instances of the given class as they are voices in the
+        * AudioWorkflow, so that each instance can play a separate note when
+        * necessary.
+        *
+        * This method is thread-safe: multiple requests to add an Instrument can be
+        * submitted in parallel, as all requests are queued and safely processed one
+        * after the other by the RequestManager.
+        *
+        * Note that this method only makes a request and does not perform any
+        * computation. It always returns instantly, and does not wait for the
+        * AddInstrumentRequest to be executed and for all the instrument instances
+        * to be added. The AddInstrumentRequest::Listener passed in parameter will
+        * precisely be called once that point is reached to take over.
+        * @param[in] listener The listener to call back when the request to add the
+        *   new Instrument is executed. If this pointer is null, then no listener
+        *   will be called and this method will have the same effect as its
+        *   argument-less counterpart addInstrument().
+        */
+        template<class InstrumentType>
+        void addInstrument(AddInstrumentListener<InstrumentType>* listener);
 
     protected:
 
@@ -2855,7 +3022,13 @@ namespace ANGLECORE
     template<class InstrumentType>
     void Master::addInstrument()
     {
-        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer);
+        addInstrument<InstrumentType>(nullptr);
+    }
+
+    template<class InstrumentType>
+    void Master::addInstrument(AddInstrumentListener<InstrumentType>* listener)
+    {
+        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer, listener);
         m_requestManager.postRequestAsynchronously(std::move(request));
     }
 }
