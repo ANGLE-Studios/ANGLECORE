@@ -27,13 +27,7 @@
 
 namespace ANGLECORE
 {
-    Master::Master() :
-
-        /*
-        * The instrument request queue should only handle one request at a time, so
-        * there is no need to reserve more space than one slot.
-        */
-        m_instrumentRequests(1)
+    Master::Master()
     {
         for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
         {
@@ -150,7 +144,7 @@ namespace ANGLECORE
         }
     }
 
-    void Master::renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples)
+    void Master::renderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples)
     {
         /*
         * ===================================
@@ -221,7 +215,7 @@ namespace ANGLECORE
         }
     }
 
-    void Master::splitAndRenderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample)
+    void Master::splitAndRenderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample)
     {
         /*
         * The purpose of this method is to fulfill the Master's responsibility to
@@ -279,79 +273,35 @@ namespace ANGLECORE
     void Master::processRequests()
     {
         /*
-        * ===================================
-        * STEP 1/1: INSTRUMENT REQUESTS
-        * ===================================
+        * The following pointer will hold a copy of any Request that has been sent
+        * by the Master to itself (on different threads). When it is deleted, its
+        * reference count will decrement, and hereby provide an extra signal to the
+        * Master the Request has been processed, in addition to the more
+        * conventional "hasBeenProcessed" flag.
+        */
+        std::shared_ptr<Request> request;
+
+        /*
+        * Note that the Master processes only one request per audio block, so there
+        * is no loop here but only one attempt to collect a request.
         */
 
+        /* Has a request been received? ... */
+        if (m_requestManager.popRequest(request) && request)
         {
             /*
-            * We define a scope here so that the following pointer is deleted as
-            * soon as possible. This pointer will hold a copy of any
-            * InstrumentRequest that has been sent by the Master to itself (on
-            * different threads). When it is deleted, its reference count will
-            * decrement, and hereby signal to the Master the InstrumentRequest has
-            * been processed.
+            * ... YES! So we need to process the request. Note that null
+            * pointers are ignored.
             */
-            std::shared_ptr<InstrumentRequest> request;
 
-            /* Has an InstrumentRequest been received? ... */
-            if (m_instrumentRequests.pop(request) && request)
-            {
-                /*
-                * ... YES! So we need to process the request. Note that null
-                * pointers are ignored.
-                */
+            request->process();
+            request->hasBeenProcessed.store(true);
 
-                switch (request->type)
-                {
-                case InstrumentRequest::Type::ADD:
-                    m_audioWorkflow.turnRackOn(request->rackNumber);
-                    break;
-
-                case InstrumentRequest::Type::REMOVE:
-                    m_audioWorkflow.turnRackOff(request->rackNumber);
-                    break;
-                }
-
-                ConnectionRequest& connectionRequest = request->connectionRequest;
-
-                /* We first test if the connection request is valid... */
-                uint32_t size = connectionRequest.newRenderingSequence.size();
-                if (size > 0 && connectionRequest.newVoiceAssignments.size() == size && connectionRequest.oneIncrements.size() == size)
-                {
-                    /* The request is valid, so we execute the ConnectionPlan... */
-                    bool success = m_audioWorkflow.executeConnectionPlan(connectionRequest.plan);
-
-                    /*
-                    * ... And notify the Master through the request if the execution
-                    * was a success:
-                    */
-                    connectionRequest.hasBeenSuccessfullyProcessed.store(success);
-
-                    /*
-                    * If the connection request has failed, it could mean the
-                    * connection plan has only been partially executed, in which
-                    * case we will still want the renderer to update its internal
-                    * rendering sequence, so we call the processConnectionRequest()
-                    * method on the renderer, independently from the value of the
-                    * 'success' boolean.
-                    */
-                    m_renderer.processConnectionRequest(connectionRequest);
-                }
-
-                /*
-                * Then, we ask the AudioWorkflow to execute the parameter
-                * registration plan corresponding to the current request. This will
-                * cause the AudioWorkflow to either add some parameters to its
-                * registers, so that the end-user can then change their value
-                * through parameter change requests, or to remove some from its
-                * registers, to precisely stop routing these requests and prepare to
-                * remove those parameters and their associated workflow items
-                * entirely.
-                */
-                m_audioWorkflow.executeParameterRegistrationPlan(request->parameterRegistrationPlan);
-            }
+            /*
+            * Afterwards, we send the request back to the RequestManager for
+            * postprocessing and deletion.
+            */
+            m_requestManager.postProcessedRequest(std::move(request));
         }
     }
 
@@ -362,7 +312,7 @@ namespace ANGLECORE
 
         case MIDIMessage::Type::NOTE_ON:
             {
-                /* Can we play a new note? We need to find a free voice first */
+                /* Can we play a new note? We need to find a free voice first: */
                 unsigned short freeVoiceNumber = m_audioWorkflow.findFreeVoice();
                 if (freeVoiceNumber >= ANGLECORE_NUM_VOICES)
 

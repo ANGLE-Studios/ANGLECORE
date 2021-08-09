@@ -47,6 +47,7 @@ namespace ANGLECORE
         {
             bool isEmpty;
             std::shared_ptr<Instrument> instrument;
+            bool isActivated;
         };
 
         bool isFree;

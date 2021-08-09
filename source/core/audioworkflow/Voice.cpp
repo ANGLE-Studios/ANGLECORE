@@ -37,6 +37,7 @@ namespace ANGLECORE
         {
             racks[r].isEmpty = true;
             racks[r].instrument = nullptr;
+            racks[r].isActivated = false;
         }
     }
 }

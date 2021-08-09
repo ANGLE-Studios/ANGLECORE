@@ -20,12 +20,24 @@
 **
 **********************************************************************/
 
-#include "InstrumentRequest.h"
+#pragma once
+
+#include <stdint.h>
+
+#include "../../../config/RenderingConfig.h"
 
 namespace ANGLECORE
 {
-    InstrumentRequest::InstrumentRequest(Type type, unsigned short rackNumber) :
-        type(type),
-        rackNumber(rackNumber)
-    {}
+    /**
+    * \struct ParameterChangeRequest ParameterChangeRequest.h
+    * When the end-user asks to change the value of a Parameter within an Instrument
+    * (volume, etc.) or the entire AudioWorkflow (sample rate, etc.), an instance of
+    * this structure is created to store all necessary information about that
+    * request.
+    */
+    struct ParameterChangeRequest
+    {
+        floating_type newValue;
+        uint32_t durationInSamples;
+    };
 }

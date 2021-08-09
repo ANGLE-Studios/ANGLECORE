@@ -160,7 +160,8 @@ namespace ANGLECORE
                             /*
                             * Here we use FastMath::exp to compute the increment,
                             * which is a lot faster than using its C counterpart,
-                            * assuming: -0.5 <= epsilon <= 0.5.
+                            * and provides a good approximation assuming we have:
+                            * -0.5 <= epsilon <= 0.5.
                             */
                             m_transientTracker.increment = FastMath::exp(epsilon);
                         }
@@ -208,8 +209,8 @@ namespace ANGLECORE
         /*
         * Since a Worker is only called within a consistent rendering sequence, a
         * ParameterGenerator will only be called if its unique output stream is
-        * connected to rendering pipeline. Therefore, the 'output' pointer should
-        * never be null, and we will not verify that assertion in the code.
+        * connected to the rendering pipeline. Therefore, the 'output' pointer
+        * should never be null, and we will not verify that assertion in the code.
         */
 
         /*

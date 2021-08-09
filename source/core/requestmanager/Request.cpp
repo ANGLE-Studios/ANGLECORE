@@ -20,16 +20,30 @@
 **
 **********************************************************************/
 
-#include "ConnectionRequest.h"
+#include "Request.h"
 
 namespace ANGLECORE
 {
-    ConnectionRequest::ConnectionRequest()
+    Request::Request()
+    {
+        hasBeenPreprocessed.store(false);
+        hasBeenProcessed.store(false);
+        success.store(false);
+        hasBeenPostprocessed.store(false);
+    }
+
+    bool Request::preprocess()
     {
         /*
-        * By default, since the request has not been processed yet, its success flag
-        * is set to false.
+        * By default, requests have no preparation instructions, so we return true
+        * to indicate the preparation went well anyway and the request can now be
+        * processed:
         */
-        hasBeenSuccessfullyProcessed.store(false);
+        return true;
+    }
+
+    void Request::postprocess()
+    {
+        /* By default, requests do not perform any postprocessing. */
     }
 }

@@ -34,14 +34,15 @@
 #include "../audioworkflow/instrument/Instrument.h"
 #include "../../config/RenderingConfig.h"
 #include "../../config/AudioConfig.h"
-#include "../requests/InstrumentRequest.h"
 #include "../../utility/StringView.h"
+#include "../requestmanager/RequestManager.h"
+#include "../requestmanager/requests/AddInstrumentRequest.h"
 
 namespace ANGLECORE
 {
     /**
     * \class Master Master.h
-    * Agent that orchestrates the rendering and the interaction with the end-user
+    * The Master orchestrates the rendering and the interaction with the end-user
     * requests. It should be the only entry point from outside when developping an
     * ANGLECORE-based application.
     */
@@ -100,10 +101,64 @@ namespace ANGLECORE
         * @param[in] numSamples The number of samples to generate and write into
         *   \p audioBlockToGenerate.
         */
-        void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
+        void renderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
+        /**
+        * Requests the Master to add an Instrument of the given type to the
+        * AudioWorkflow. The type given as a template parameter must be a class that
+        * inherits from the Instrument class.
+        * 
+        * Behind the scenes, this method creates an AddInstrumentRequest object and
+        * passes it to an internal RequestManager that handles requests
+        * asynchronously. The AddInstrumentRequest instructs to create and plug in
+        * as many instances of the given class as they are voices in the
+        * AudioWorkflow, so that each instance can play a separate note when
+        * necessary.
+        * 
+        * This method is thread-safe: multiple requests to add an Instrument can be
+        * submitted in parallel, as all requests are queued and safely processed one
+        * after the other by the RequestManager.
+        * 
+        * Note that this method only makes a request and does not perform any
+        * computation. It always returns instantly, and does not wait for the
+        * AddInstrumentRequest to be executed and for all the instrument instances
+        * to be added. Because of this asynchronous implementation, this method does
+        * not provide any feedback on how the execution went. To retrieve such
+        * information, create an AddInstrumentRequest::Listener and use the
+        * alternative version of
+        * addInstrument(AddInstrumentListener<InstrumentType>* listener) instead.
+        */
         template<class InstrumentType>
-        bool addInstrument();
+        void addInstrument();
+
+        /**
+        * Requests the Master to add an Instrument of the given type to the
+        * AudioWorkflow. The type given as a template parameter must be a class that
+        * inherits from the Instrument class.
+        * 
+        * Behind the scenes, this method creates an AddInstrumentRequest object and
+        * passes it to an internal RequestManager that handles requests
+        * asynchronously. The AddInstrumentRequest instructs to create and plug in
+        * as many instances of the given class as they are voices in the
+        * AudioWorkflow, so that each instance can play a separate note when
+        * necessary.
+        * 
+        * This method is thread-safe: multiple requests to add an Instrument can be
+        * submitted in parallel, as all requests are queued and safely processed one
+        * after the other by the RequestManager.
+        *
+        * Note that this method only makes a request and does not perform any
+        * computation. It always returns instantly, and does not wait for the
+        * AddInstrumentRequest to be executed and for all the instrument instances
+        * to be added. The AddInstrumentRequest::Listener passed in parameter will
+        * precisely be called once that point is reached to take over.
+        * @param[in] listener The listener to call back when the request to add the
+        *   new Instrument is executed. If this pointer is null, then no listener
+        *   will be called and this method will have the same effect as its
+        *   argument-less counterpart addInstrument().
+        */
+        template<class InstrumentType>
+        void addInstrument(AddInstrumentListener<InstrumentType>* listener);
 
     protected:
 
@@ -137,7 +192,7 @@ namespace ANGLECORE
         * @param[in] startSample The position within the \p audioBlockToGenerate to
         *   start writing from.
         */
-        void splitAndRenderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample);
+        void splitAndRenderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample);
 
         /** Processes the requests received in its internal queues. */
         void processRequests();
@@ -158,142 +213,21 @@ namespace ANGLECORE
         AudioWorkflow m_audioWorkflow;
         Renderer m_renderer;
         MIDIBuffer m_midiBuffer;
-
-        /** Queue for pushing and receiving instrument requests. */
-        farbot::fifo<
-            std::shared_ptr<InstrumentRequest>,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::concurrency::single,
-            farbot::fifo_options::full_empty_failure_mode::return_false_on_full_or_empty,
-            farbot::fifo_options::full_empty_failure_mode::overwrite_or_return_default
-        > m_instrumentRequests;
-
+        RequestManager m_requestManager;
         bool m_voiceIsStopping[ANGLECORE_NUM_VOICES];
         StopTracker m_stopTrackers[ANGLECORE_NUM_VOICES];
     };
 
     template<class InstrumentType>
-    bool Master::addInstrument()
+    void Master::addInstrument()
     {
-        std::lock_guard<std::mutex> scopedLock(m_audioWorkflow.getLock());
+        addInstrument<InstrumentType>(nullptr);
+    }
 
-        /* Can we insert a new instrument? We need to find an empty spot first */
-        unsigned short emptyRackNumber = m_audioWorkflow.findEmptyRack();
-        if (emptyRackNumber >= ANGLECORE_MAX_NUM_INSTRUMENTS_PER_VOICE)
-
-            /*
-            * There is no empty spot, so we stop here and return false. We cannot
-            * insert a new instrument to the workflow.
-            */
-            return false;
-
-        /*
-        * Otherwise, if we can insert a new instrument, then we need to prepare the
-        * instrument's environment, as well as a new InstrumentRequest for bridging
-        * the instrument with the real-time rendering pipeline.
-        */
-
-        std::shared_ptr<InstrumentRequest> request = std::make_shared<InstrumentRequest>(InstrumentRequest::Type::ADD, emptyRackNumber);
-        ConnectionRequest& connectionRequest = request->connectionRequest;
-        ConnectionPlan& connectionPlan = connectionRequest.plan;
-        ParameterRegistrationPlan& parameterRegistrationPlan = request->parameterRegistrationPlan;
-
-        for (unsigned short v = 0; v < ANGLECORE_NUM_VOICES; v++)
-        {
-            /*
-            * We create an Instrument of the given type, and then cast it to an
-            * Instrument, to ensure type validity.
-            */
-            std::shared_ptr<Instrument> instrument = std::make_shared<InstrumentType>();
-
-            /*
-            * Then, we insert the Instrument into the Workflow and plan its bridging
-            * to the real-time rendering pipeline.
-            */
-            m_audioWorkflow.addInstrumentAndPlanBridging(v, emptyRackNumber, instrument, connectionPlan, parameterRegistrationPlan);
-        }
-
-        /*
-        * Once here, we have a ConnectionPlan and a ParameterRegisterPlan ready to
-        * be used in our InstrumentRequest. We now need to precompute the
-        * consequences of executing the ConnectionPlan and connecting all of the
-        * instruments to the AudioWorkflow's real-time rendering pipeline.
-        */
-
-        /*
-        * We first calculate the rendering sequence that will take effect right
-        * after the connection plan is executed.
-        */
-        std::vector<std::shared_ptr<Worker>> newRenderingSequence = m_audioWorkflow.buildRenderingSequence(connectionPlan);
-
-        /*
-        * And from that sequence, we can precompute and assign the rest of the
-        * request properties:
-        */
-        connectionRequest.newRenderingSequence = newRenderingSequence;
-        connectionRequest.newVoiceAssignments = m_audioWorkflow.getVoiceAssignments(newRenderingSequence);
-        connectionRequest.oneIncrements.resize(newRenderingSequence.size(), 1);
-
-        /*
-        * Finally, we need to send the InstrumentRequest to the Renderer. To avoid
-        * any memory deallocation by the real-time thread after it is done with the
-        * request, we do not pass the request straight to the Renderer. Instead, we
-        * create a copy and send that copy to the latter. Therefore, when the
-        * Renderer is done with the request, it will only delete a copy of a shared
-        * pointer and decrement its reference count by one, signaling to the Master
-        * the request has been processed (and either succeeded or failed), and that
-        * it can be safely destroyed by the non real-time thread that created it.
-        */
-
-        /* We copy the InstrumentRequest... */
-        std::shared_ptr<InstrumentRequest> requestCopy = request;
-
-        /* ... And post the copy:*/
-        m_instrumentRequests.push(std::move(requestCopy));
-
-        /*
-        * From now on, the InstrumentRequest is in the hands of the real-time
-        * thread. We cannot access any member of 'request'. We will still use the
-        * reference count of the shared pointer as an indicator of when the
-        * real-time thread is done with the request (although it is not guaranteed
-        * to be safe by the standard). As long as that number is greater than 1
-        * (and, normally, equal to 2), the real-time thread is still in possession
-        * of the copy, and possibly processing it. So the non real-time thread
-        * should wait. When this number reaches 1, it means the real-time thread is
-        * done with the request and the non real-time thread can safely delete it.
-        */
-
-        /*
-        * To avoid infinite loops and therefore deadlocks while waiting for the
-        * real-time thread, we introduce a timeout, using a number of attempts.
-        */
-        const unsigned short timeoutAttempts = 4;
-        unsigned short attempt = 0;
-
-        /*
-        * We then wait for the real-time thread to finish, or for when we reach the
-        * timeout.
-        */
-        while (request.use_count() > 1 && attempt++ < timeoutAttempts)
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-        /*
-        * Once here, we either reached the timeout, or the copy of the
-        * InstrumentRequest has been destroyed, and only the original remains, and
-        * can be safely deleted. In any case, the original request will be deleted,
-        * so if the timeout is the reason for leaving the loop, then the copy will
-        * outlive the original request in the real-time thread, which will trigger
-        * memory deallocation upon destruction, and possibly provoke an audio glitch
-        * (this should actually be very rare). If we left the loop because the copy
-        * was destroyed (which is the common case), then the original will be safely
-        * deleted here by the non real-time thread.
-        */
-
-        /*
-        * We access the 'hasBeenSuccessfullyProcessed' variable that may have been
-        * edited by the real-time thread, in order to determine whether or not the
-        * request was been successfully processed.
-        */
-        return request->connectionRequest.hasBeenSuccessfullyProcessed.load();
+    template<class InstrumentType>
+    void Master::addInstrument(AddInstrumentListener<InstrumentType>* listener)
+    {
+        std::shared_ptr<AddInstrumentRequest<InstrumentType>> request = std::make_shared<AddInstrumentRequest<InstrumentType>>(m_audioWorkflow, m_renderer, listener);
+        m_requestManager.postRequestAsynchronously(std::move(request));
     }
 }

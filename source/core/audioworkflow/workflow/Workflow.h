@@ -203,7 +203,7 @@ namespace ANGLECORE
         *   will actually compute which Worker should be called and in which order
         *   to render every input of \p worker.
         * @param[in] plan The ConnectionPlan that will be executed next, and which
-        *   should be therefore taken into account in the computation
+        *   should therefore be taken into account in the computation
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
@@ -217,7 +217,7 @@ namespace ANGLECORE
         *   will actually compute which Worker should be called and in which order
         *   to render \p stream.
         * @param[in] plan The ConnectionPlan that will be executed next, and which
-        *   should be therefore taken into account in the computation
+        *   should therefore be taken into account in the computation
         * @param[out] currentRenderingSequence The output sequence of the
         *   computation, which is recursively filled up.
         */
