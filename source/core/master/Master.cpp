@@ -144,7 +144,7 @@ namespace ANGLECORE
         }
     }
 
-    void Master::renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples)
+    void Master::renderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples)
     {
         /*
         * ===================================
@@ -215,7 +215,7 @@ namespace ANGLECORE
         }
     }
 
-    void Master::splitAndRenderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample)
+    void Master::splitAndRenderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample)
     {
         /*
         * The purpose of this method is to fulfill the Master's responsibility to

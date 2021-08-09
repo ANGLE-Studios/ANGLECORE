@@ -101,7 +101,7 @@ namespace ANGLECORE
         * @param[in] numSamples The number of samples to generate and write into
         *   \p audioBlockToGenerate.
         */
-        void renderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
+        void renderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples);
 
         /**
         * Requests the Master to add an Instrument of the given type to the
@@ -192,7 +192,7 @@ namespace ANGLECORE
         * @param[in] startSample The position within the \p audioBlockToGenerate to
         *   start writing from.
         */
-        void splitAndRenderNextAudioBlock(float** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample);
+        void splitAndRenderNextAudioBlock(export_type** audioBlockToGenerate, unsigned short numChannels, uint32_t numSamples, uint32_t startSample);
 
         /** Processes the requests received in its internal queues. */
         void processRequests();
