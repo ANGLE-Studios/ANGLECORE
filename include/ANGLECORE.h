@@ -1883,7 +1883,7 @@ namespace ANGLECORE
         * Activates the given Rack for the Mixer to use it in the mix. This method
         * may start all instances of the Instrument present in the rack if some
         * voices are on when this method is called.
-        * .
+        *
         * This method must only be called by the real-time thread.
         * @param[in] rackNumber Rack to activate.
         */
@@ -1894,7 +1894,7 @@ namespace ANGLECORE
         * that this method merely deactivates the rack, and does not call any method
         * on any instrument to stop and render its audio tail. Such processing must
         * therefore be called for beforehand if needed.
-        * .
+        *
         * This method must only be called by the real-time thread.
         * @param[in] rackNumber Rack to deactivate.
         */
@@ -2006,7 +2006,7 @@ namespace ANGLECORE
     * When the end-user instructs to change something in the AudioWorkflow, an
     * instance of this structure is created to store all necessary information
     * about that request.
-    * .
+    *
     * The Request structure provides three virtual methods that can be overriden in
     * derived classes: preprocess(), process(), and postprocess(). The preprocess()
     * method should prepare everything for the Request's execution and must return a
@@ -2016,18 +2016,18 @@ namespace ANGLECORE
     * postprocess() method is called right before the deletion of the Request
     * object, in order to do some final processing, like calling listeners to inform
     * them about how the Request's execution went.
-    * .
+    *
     * Both preprocess() and postprocess() methods are called on a non real-time
     * thread, whereas the process() method is always executed on the real-time
     * thread, so it must be really fast.
-    * .
+    *
     * The preprocess() method is guaranteed to always be executed before the
     * process() method, which in turn is guaranteed to always be executed before the
     * postprocess() method. However, if the preparation stage goes wrong and the
     * preprocess() method returns false, then the process() method will not be
     * called (the Request will not even be sent to the real-time thread), and the
     * RequestManager will jump directly to the postprocess() method instead.
-    * .
+    *
     * For two different requests both posted asynchronously to the RequestManager,
     * the preprocess() method is guaranteed to always be executed separately and
     * never concurrently. That guarantee no longer holds for requests posted
@@ -2078,12 +2078,12 @@ namespace ANGLECORE
         * false otherwise, in which case the Request will not be executed on the
         * real-time thread and the process() method will not be called by the
         * RequestManager. By default, this method returns true.
-        * .
+        *
         * If the Request is posted synchronously, then this method will be called by
         * the RequestManager on the non real-time thread upon reception. Otherwise,
         * if the Request is posted asynchronously, then this method will be called
         * by the RequestManager's asynchronous, non real-time thread.
-        * .
+        *
         * The preprocess() method is mostly useful for asynchronously posted
         * requests: since the RequestManager's asynchronous thread treats only one
         * request at a time, the preprocess() method is guaranteed to always be
@@ -2104,7 +2104,7 @@ namespace ANGLECORE
         * always executed, even if the preprocessing failed and the process() method
         * was not called before. It will therefore give the same result as if its
         * content was implemented into the ~Request() destructor.
-        * .
+        *
         * The postprocess() method is suitable for broadcasting information about
         * the Request's success to listeners, using the provided atomic flags and,
         * if necessary, other additional status variables defined in derived
@@ -2120,7 +2120,7 @@ namespace ANGLECORE
     * or instead queue requests into a waiting line so that only one request at a
     * time is processed. Requests that fall into the first category are referred to
     * as "synchronously" posted requests, while others are "asynchronously" posted.
-    * .
+    *
     * Note that the term "synchronous" here qualifies a request's transfer and not
     * its execution. In other words, synchronously posted requests have no
     * guarantee to be executed instantly: they are merely synchronously transferred
@@ -2147,7 +2147,7 @@ namespace ANGLECORE
         * any guarantee that the request will be executed instantly: the request
         * will be merely synchronously transferred to the real-time thread. The
         * latter will process it as soon as it can.
-        * .
+        *
         * Note that the pointer \p request passed in argument will be moved
         * according to the C++ move semantics, so it will become empty once this
         * method is called. It is highly recommended to gather all necessary
@@ -2168,7 +2168,7 @@ namespace ANGLECORE
         * thread. Although its synchronous counterpart introduces less delay before
         * processing, this method helps better mitigate risks of failure in the
         * request processing pipeline.
-        * .
+        *
         * Note that the pointer \p request passed in argument will be moved
         * according to the C++ move semantics, so it will become empty once this
         * method is called. It is highly recommended to gather all necessary
@@ -2189,7 +2189,7 @@ namespace ANGLECORE
         * into the \p result pointer reference passed in argument. Otherwise, this
         * method will return false, and the argument \p result will be left
         * untouched.
-        * .
+        *
         * This method must only be called by the real-time thread.
         * @param[out] result A valid pointer to a Request if available for the
         *   real-time thread to read, and the same pointer object as passed in
@@ -2202,7 +2202,7 @@ namespace ANGLECORE
         * PostProcessingThread for final processing and deletion. The Request passed
         * in argument must have already been processed, that is its process() method
         * should have been called before.
-        * .
+        *
         * Note that the pointer \p request passed in argument will be moved
         * according to the C++ move semantics, so it will become empty once this
         * method is called.

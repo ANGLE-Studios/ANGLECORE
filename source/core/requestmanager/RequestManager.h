@@ -38,7 +38,7 @@ namespace ANGLECORE
     * or instead queue requests into a waiting line so that only one request at a
     * time is processed. Requests that fall into the first category are referred to
     * as "synchronously" posted requests, while others are "asynchronously" posted.
-    * .
+    * 
     * Note that the term "synchronous" here qualifies a request's transfer and not
     * its execution. In other words, synchronously posted requests have no
     * guarantee to be executed instantly: they are merely synchronously transferred
@@ -65,7 +65,7 @@ namespace ANGLECORE
         * any guarantee that the request will be executed instantly: the request
         * will be merely synchronously transferred to the real-time thread. The
         * latter will process it as soon as it can.
-        * .
+        * 
         * Note that the pointer \p request passed in argument will be moved
         * according to the C++ move semantics, so it will become empty once this
         * method is called. It is highly recommended to gather all necessary
@@ -86,7 +86,7 @@ namespace ANGLECORE
         * thread. Although its synchronous counterpart introduces less delay before
         * processing, this method helps better mitigate risks of failure in the
         * request processing pipeline.
-        * .
+        * 
         * Note that the pointer \p request passed in argument will be moved
         * according to the C++ move semantics, so it will become empty once this
         * method is called. It is highly recommended to gather all necessary
@@ -107,7 +107,7 @@ namespace ANGLECORE
         * into the \p result pointer reference passed in argument. Otherwise, this
         * method will return false, and the argument \p result will be left
         * untouched.
-        * .
+        * 
         * This method must only be called by the real-time thread.
         * @param[out] result A valid pointer to a Request if available for the
         *   real-time thread to read, and the same pointer object as passed in
@@ -120,7 +120,7 @@ namespace ANGLECORE
         * PostProcessingThread for final processing and deletion. The Request passed
         * in argument must have already been processed, that is its process() method
         * should have been called before.
-        * .
+        * 
         * Note that the pointer \p request passed in argument will be moved
         * according to the C++ move semantics, so it will become empty once this
         * method is called.
