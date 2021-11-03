@@ -1,6 +1,6 @@
 # ANGLECORE
 
-A free and open-source software development kit for developping real-time audio engines.
+A free and open-source software development kit for developping instrument-based audio plugins.
 
 ## What is ANGLECORE?
 
